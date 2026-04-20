@@ -1,4 +1,5 @@
 #include "protocol.h"
+#include <errno.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>
 #include <unistd.h>
@@ -8,6 +9,8 @@ int recv_full(int fd, void *buf, size_t len) {
     char *p = (char *)buf;
     while (total < len) {
         ssize_t n = recv(fd, p + total, len - total, 0);
+        if (n < 0 && errno == EINTR)
+            continue;
         if (n <= 0)
             return -1;
         total += (size_t)n;
@@ -20,6 +23,8 @@ int send_full(int fd, const void *buf, size_t len) {
     const char *p = (const char *)buf;
     while (total < len) {
         ssize_t n = send(fd, p + total, len - total, 0);
+        if (n < 0 && errno == EINTR)
+            continue;
         if (n <= 0)
             return -1;
         total += (size_t)n;

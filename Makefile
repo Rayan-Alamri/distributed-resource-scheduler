@@ -18,7 +18,11 @@ TEST_SCHED_SRCS = tests/test_scheduler.c \
                   src/master/scheduler.c \
                   src/shared/protocol.c
 
-.PHONY: all master worker test_scheduler test clean
+TEST_WORKER_SRCS = tests/test_worker_executor.c \
+                   src/worker/executor.c \
+                   src/shared/protocol.c
+
+.PHONY: all master worker test_scheduler test_worker test clean
 
 all: master worker
 
@@ -32,7 +36,11 @@ test_scheduler: $(TEST_SCHED_SRCS) | bin
 	$(CC) $(CFLAGS) -o bin/test_scheduler $(TEST_SCHED_SRCS)
 	./bin/test_scheduler
 
-test: test_scheduler
+test_worker: $(TEST_WORKER_SRCS) | bin
+	$(CC) $(CFLAGS) -o bin/test_worker_executor $(TEST_WORKER_SRCS)
+	./bin/test_worker_executor
+
+test: test_scheduler test_worker
 
 bin:
 	mkdir -p bin
