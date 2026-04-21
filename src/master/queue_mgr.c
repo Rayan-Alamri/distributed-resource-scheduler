@@ -12,6 +12,7 @@ void queue_init(TaskQueue *q) {
 
 void queue_destroy(TaskQueue *q) {
     pthread_mutex_lock(&q->lock);
+    /* Drain every allocated node so repeated test runs do not leak queue data. */
     QueueNode *cur = q->head;
     while (cur) {
         QueueNode *tmp = cur->next;
@@ -51,6 +52,10 @@ int queue_enqueue(TaskQueue *q, const NetworkPayload *task) {
 
 int queue_dequeue(TaskQueue *q, NetworkPayload *out) {
     pthread_mutex_lock(&q->lock);
+    /*
+     * pthread_cond_wait atomically releases the mutex while sleeping and
+     * reacquires it before returning, so producers can enqueue safely.
+     */
     while (!q->head)
         pthread_cond_wait(&q->not_empty, &q->lock);
     QueueNode *node = q->head;
@@ -70,6 +75,7 @@ int queue_dequeue_nowait(TaskQueue *q, NetworkPayload *out) {
         pthread_mutex_unlock(&q->lock);
         return -1;
     }
+    /* Same FIFO removal as queue_dequeue(), but returns immediately if empty. */
     QueueNode *node = q->head;
     q->head = node->next;
     if (!q->head)

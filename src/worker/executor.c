@@ -12,6 +12,10 @@ static uint32_t count_primes(uint32_t limit) {
 
     for (uint32_t n = 2; n <= limit; n++) {
         int is_prime = 1;
+        /*
+         * Stop at sqrt(n) without calling sqrt(): d <= n / d avoids floating
+         * point dependencies and also prevents d * d overflow.
+         */
         for (uint32_t d = 2; d <= n / d; d++) {
             if (n % d == 0) {
                 is_prime = 0;
@@ -29,6 +33,10 @@ static uint32_t matrix_checksum(uint32_t size) {
     if (size == 0)
         return 0;
 
+    /*
+     * The matrix workload simulates CPU-heavy nested-loop work without storing
+     * a full matrix. Only the checksum is returned to keep IPC payloads small.
+     */
     uint32_t checksum = 0;
     for (uint32_t row = 0; row < size; row++) {
         for (uint32_t col = 0; col < size; col++) {
@@ -106,6 +114,10 @@ int executor_run_task(const NetworkPayload *task, uint32_t *result_out) {
     if (pid == 0) {
         uint32_t result;
 
+        /*
+         * Child owns only the write end of the pipe. Use _exit() so child
+         * termination does not flush parent-owned stdio buffers twice.
+         */
         close(pipe_fd[0]);
         result = execute_workload(task->command_code, task->argument);
         if (write_full_fd(pipe_fd[1], &result, sizeof(result)) != 0) {
@@ -116,6 +128,10 @@ int executor_run_task(const NetworkPayload *task, uint32_t *result_out) {
         _exit(0);
     }
 
+    /*
+     * Parent waits for both a complete result and normal child termination.
+     * This separates computation failure from network/result-send failure.
+     */
     close(pipe_fd[1]);
 
     uint32_t result = 0;

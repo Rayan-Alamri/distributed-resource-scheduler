@@ -1,0 +1,66 @@
+services:
+  master:
+    build: .
+    command: master
+    environment:
+      MASTER_PORT: "9090"
+      DEMO_TASKS: "6"
+    ports:
+      - "9090:9090"
+    networks:
+      - scheduler-net
+
+  worker_rpi3:
+    build: .
+    command: worker master 9090
+    depends_on:
+      - master
+    networks:
+      - scheduler-net
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+  worker_rpi4:
+    build: .
+    command: worker master 9090
+    depends_on:
+      - master
+    networks:
+      - scheduler-net
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 1G
+        reservations:
+          cpus: '1.0'
+          memory: 512M
+
+  worker_rpi5:
+    build: .
+    command: worker master 9090
+    depends_on:
+      - master
+    networks:
+      - scheduler-net
+    restart: on-failure
+    deploy:
+      resources:
+        limits:
+          cpus: '4.0'
+          memory: 2G
+        reservations:
+          cpus: '2.0'
+          memory: 1G
+
+networks:
+  scheduler-net:
+    driver: bridge

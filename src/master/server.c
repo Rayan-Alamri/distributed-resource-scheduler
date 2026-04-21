@@ -28,11 +28,19 @@ static void *worker_thread(void *arg) {
 
     NetworkPayload pkt;
     while (recv_full(fd, &pkt, sizeof(pkt)) == 0) {
+        /*
+         * Every socket read arrives in network byte order. Convert once at the
+         * boundary so the rest of the master logic can compare normal integers.
+         */
         payload_to_host(&pkt);
 
         switch ((MessageType)pkt.type) {
 
         case MSG_HEARTBEAT:
+            /*
+             * Heartbeats are lightweight liveness updates. The scheduler and
+             * dashboard read the same registry, so writes stay under the lock.
+             */
             pthread_mutex_lock(&ms->registry.lock);
             {
                 WorkerInfo *w = registry_get(&ms->registry, wid);
@@ -45,6 +53,10 @@ static void *worker_thread(void *arg) {
         case MSG_RESULT:
             printf("[master] result: worker=%u task=%u result=%u\n",
                    pkt.worker_id, pkt.task_id, pkt.result);
+            /*
+             * A result completes the worker's current task. Clearing the task
+             * snapshot prevents a later disconnect from requeueing finished work.
+             */
             pthread_mutex_lock(&ms->registry.lock);
             {
                 WorkerInfo *w = registry_get(&ms->registry, wid);
@@ -63,7 +75,11 @@ static void *worker_thread(void *arg) {
         }
     }
 
-    /* Worker disconnected — requeue any in-flight task */
+    /*
+     * Worker disconnected. If it was busy, move its task back into the FIFO so
+     * another worker can complete it. The registry lock is released before
+     * queue_requeue() to avoid holding two subsystem locks at the same time.
+     */
     fprintf(stderr, "[master] worker %u disconnected\n", wid);
     pthread_mutex_lock(&ms->registry.lock);
     {
@@ -136,7 +152,10 @@ void server_run(MasterState *ms) {
             break;
         }
 
-        /* Expect a MSG_REGISTER handshake first */
+        /*
+         * The first packet must be a registration handshake. This keeps random
+         * TCP clients from being added to the worker registry accidentally.
+         */
         NetworkPayload reg;
         if (recv_full(cfd, &reg, sizeof(reg)) != 0) {
             fprintf(stderr, "[master] registration recv failed, dropping connection\n");
@@ -170,6 +189,10 @@ void server_run(MasterState *ms) {
         wa->worker_id = wid;
         wa->ms        = ms;
 
+        /*
+         * Each worker gets a detached reader thread. The main server loop stays
+         * dedicated to accepting new workers while these threads handle results.
+         */
         pthread_t       tid;
         pthread_attr_t  attr;
         pthread_attr_init(&attr);
@@ -185,12 +208,62 @@ void server_shutdown(MasterState *ms) {
     queue_destroy(&ms->queue);
 }
 
+/* ── Demo task seeder ────────────────────────────────────────────────────── */
+
+static void *seed_demo_tasks(void *arg) {
+    MasterState *ms = (MasterState *)arg;
+    const char *env = getenv("DEMO_TASKS");
+    int count = 6;
+
+    if (env && *env != '\0') {
+        int n = atoi(env);
+        if (n > 0 && n <= 100)
+            count = n;
+    }
+
+    /* Wait for workers to connect before flooding the queue */
+    printf("[demo] will enqueue %d tasks in 3 seconds...\n", count);
+    sleep(3);
+
+    for (int i = 0; i < count; i++) {
+        NetworkPayload task;
+        memset(&task, 0, sizeof(task));
+        task.type         = MSG_TASK;
+        task.task_id      = (uint32_t)(i + 1);
+        task.command_code = 1;  /* all prime tasks — slow enough to observe */
+        task.argument     = 5000000 + i * 1000000;
+        queue_enqueue(&ms->queue, &task);
+        printf("[demo] enqueued task %d: command=%u arg=%u\n",
+               i + 1, task.command_code, task.argument);
+    }
+    printf("[demo] all %d tasks enqueued\n", count);
+    return NULL;
+}
+
 /* ── Entry point ─────────────────────────────────────────────────────────── */
 
 int main(void) {
     MasterState ms;
-    if (server_init(&ms, MASTER_PORT) != 0)
+    int port = MASTER_PORT;
+    const char *port_env = getenv("MASTER_PORT");
+    if (port_env && *port_env != '\0') {
+        int p = atoi(port_env);
+        if (p > 0 && p <= 65535)
+            port = p;
+    }
+    if (server_init(&ms, port) != 0)
         return 1;
+
+    /* If DEMO_TASKS is set, spawn a thread that seeds sample tasks */
+    if (getenv("DEMO_TASKS")) {
+        pthread_t       demo_tid;
+        pthread_attr_t  demo_attr;
+        pthread_attr_init(&demo_attr);
+        pthread_attr_setdetachstate(&demo_attr, PTHREAD_CREATE_DETACHED);
+        pthread_create(&demo_tid, &demo_attr, seed_demo_tasks, &ms);
+        pthread_attr_destroy(&demo_attr);
+    }
+
     server_run(&ms);
     server_shutdown(&ms);
     return 0;

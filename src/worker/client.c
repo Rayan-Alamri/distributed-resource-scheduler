@@ -18,8 +18,11 @@ typedef struct {
     int sock_fd;
     int running;
     uint32_t worker_id;
+    /* id_lock protects updates when the master assigns/echoes an ID in tasks. */
     pthread_mutex_t id_lock;
+    /* send_lock prevents heartbeat and result threads from interleaving bytes. */
     pthread_mutex_t send_lock;
+    /* task_lock protects shutdown state and active task accounting. */
     pthread_mutex_t task_lock;
     pthread_cond_t tasks_done;
     int active_tasks;
@@ -80,6 +83,10 @@ static int send_payload_locked(WorkerRuntime *rt, NetworkPayload *payload) {
     NetworkPayload wire = *payload;
     int status;
 
+    /*
+     * Convert a local copy so callers can keep using host-order payloads after
+     * this function returns. This avoids accidental double conversion bugs.
+     */
     payload_to_net(&wire);
     pthread_mutex_lock(&rt->send_lock);
     status = send_full(rt->sock_fd, &wire, sizeof(wire));
@@ -163,6 +170,10 @@ static void *heartbeat_loop(void *arg) {
         payload.type = MSG_HEARTBEAT;
         payload.worker_id = runtime_get_worker_id(rt);
 
+        /*
+         * A heartbeat send failure usually means the TCP connection is broken.
+         * Shutting down the socket wakes the main recv loop so cleanup can run.
+         */
         if (send_payload_locked(rt, &payload) != 0) {
             fprintf(stderr, "[worker] heartbeat send failed; master may be disconnected\n");
             runtime_stop(rt);
@@ -181,6 +192,10 @@ static int execute_and_send_task(WorkerRuntime *rt, const NetworkPayload *task) 
     printf("[worker] received task=%u command=%u argument=%u\n",
            task->task_id, task->command_code, task->argument);
 
+    /*
+     * executor_run_task forks the real workload. The networking thread stays in
+     * this process, so a bad workload cannot corrupt the worker's socket state.
+     */
     exec_status = executor_run_task(task, &result);
     if (exec_status != EXECUTOR_OK) {
         fprintf(stderr, "[worker] task %u failed locally with status %d\n",
@@ -250,6 +265,10 @@ static int dispatch_task(WorkerRuntime *rt, const NetworkPayload *task) {
     pthread_t tid;
     int create_status;
 
+    /*
+     * The master includes the assigned worker_id on task packets. Store it so
+     * subsequent heartbeats and results identify this worker consistently.
+     */
     if (task->worker_id != 0)
         runtime_set_worker_id(rt, task->worker_id);
 
@@ -272,6 +291,10 @@ static int dispatch_task(WorkerRuntime *rt, const NetworkPayload *task) {
         return execute_and_send_task(rt, task);
     }
 
+    /*
+     * Task execution is detached from the receive loop. This lets the worker
+     * accept future control messages while child processes compute workloads.
+     */
     pthread_detach(tid);
     return 0;
 }
@@ -305,6 +328,10 @@ int worker_run(const WorkerConfig *config) {
         goto cleanup;
     }
 
+    /*
+     * Heartbeats run in parallel with task execution, giving the master a
+     * simple liveness signal even when workloads are CPU-bound.
+     */
     if (pthread_create(&heartbeat_thread, NULL, heartbeat_loop, &rt) != 0) {
         fprintf(stderr, "[worker] failed to start heartbeat thread\n");
         status = 1;
@@ -321,6 +348,7 @@ int worker_run(const WorkerConfig *config) {
             break;
         }
 
+        /* Inbound frames are fixed-size NetworkPayload objects from the master. */
         payload_to_host(&payload);
         switch ((MessageType)payload.type) {
         case MSG_TASK:

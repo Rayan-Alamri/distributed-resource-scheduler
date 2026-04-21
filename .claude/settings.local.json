@@ -4,7 +4,24 @@
       "Bash(make test_scheduler *)",
       "Bash(make master *)",
       "Bash(git add *)",
-      "Bash(git commit *)"
+      "Bash(git commit *)",
+      "Bash(docker compose build:*)",
+      "Bash(sudo docker compose build:*)",
+      "Bash(docker version:*)",
+      "Bash(make clean:*)",
+      "Bash(make:*)",
+      "Bash(sg docker:*)",
+      "Bash(ss:*)",
+      "Bash(chmod:*)",
+      "Bash(timeout 15 bash -c 'DEMO_TASKS=3 ./bin/master &\nMASTER_PID=$!\nsleep 2\n./bin/worker 127.0.0.1 9090 1 &\nW1=$!\nsleep 10\nkill $MASTER_PID $W1 2>/dev/null\nwait $MASTER_PID $W1 2>/dev/null\n')",
+      "Bash(timeout 15 bash -c '\nMASTER_PORT=19191 DEMO_TASKS=3 ./bin/master &\nMASTER_PID=$!\nsleep 2\nMASTER_PORT=19191 ./bin/worker 127.0.0.1 19191 1 &\nW1=$!\nsleep 10\nkill $MASTER_PID $W1 2>/dev/null\nwait $MASTER_PID $W1 2>/dev/null\n')",
+      "Bash(timeout 15 bash -c '\nMASTER_PORT=19191 DEMO_TASKS=3 ./bin/master > /tmp/master.log 2>&1 &\nMASTER_PID=$!\nsleep 2\n./bin/worker 127.0.0.1 19191 1 > /tmp/worker.log 2>&1 &\nW1=$!\nsleep 10\nkill $MASTER_PID $W1 2>/dev/null\nwait $MASTER_PID $W1 2>/dev/null\ncat /tmp/master.log\necho \"\"=== WORKER LOG ===\"\"\ncat /tmp/worker.log\n')",
+      "Bash(pkill:*)",
+      "Bash(kill:*)",
+      "Bash(pdflatex -interaction=nonstopmode docs/progress_report.tex)",
+      "Read(//usr/share/texlive/**)",
+      "Bash(sudo apt-get *)",
+      "Bash(sudo -S apt-get install -y texlive-latex-extra texlive-pictures)"
     ]
   }
 }

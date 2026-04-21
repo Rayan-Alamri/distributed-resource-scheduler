@@ -252,6 +252,112 @@ The system should handle worker or socket failure gracefully.
 
 ---
 
+## Running and Testing the Project
+
+This section provides step-by-step instructions to build, run, and test the distributed resource scheduler.
+
+### Prerequisites
+- **Linux, macOS, or WSL** (POSIX-compliant system).
+- **GCC** and **Make** for building.
+- **Docker** and **Docker Compose** for containerized testing (optional but recommended).
+- Basic knowledge of terminal commands.
+
+### Building the Project
+1. Clone or navigate to the project directory.
+2. Run `make all` to compile the binaries:
+   ```
+   make all
+   ```
+   - This generates `bin/master` and `bin/worker` executables.
+
+### Running Locally (Without Containers)
+#### Start the Master
+1. Run the master on a specific port (default: 9090):
+   ```
+   ./bin/master
+   ```
+   - The master listens for worker connections and dispatches demo tasks (6 tasks by default).
+
+#### Start Workers
+1. In separate terminals, run workers connecting to the master:
+   ```
+   ./bin/worker <master_host> <port>
+   ```
+   - Example: `./bin/worker 127.0.0.1 9090`
+   - Start multiple workers for distributed execution.
+
+2. Alternatively, use the provided script to start multiple workers:
+   ```
+   ./start-workers.sh <count> <host> <port>
+   ```
+   - Example: `./start-workers.sh 3 127.0.0.1 9090` (starts 3 workers).
+
+#### Monitor and Test
+- The master logs task assignments and results.
+- Workers execute tasks (e.g., prime calculations or matrix checksums) and send results back.
+- Test fault tolerance: Kill a worker process—the master should requeue tasks and mark it offline.
+
+### Running with Docker (Containerized Simulation)
+For easier testing and simulation of multiple devices (e.g., Raspberry Pis), use Docker.
+
+#### Build Images
+```
+docker-compose build
+```
+
+#### Run with Scaling
+- Start the master and scale workers:
+  ```
+  ./scale_workers.sh <rpi3_count> <rpi4_count> <rpi5_count>
+  ```
+  - Example: `./scale_workers.sh 2 1 1` (2 RPi3, 1 RPi4, 1 RPi5 workers with resource limits).
+
+- Or manually:
+  ```
+  docker-compose up master
+  ./manage_workers.sh add rpi3 2
+  ```
+
+#### Dynamic Connect/Disconnect Simulation
+- Add workers: `./manage_workers.sh add <type> <count>`
+- Remove workers: `./manage_workers.sh remove <container_name>`
+- Check logs: `docker-compose logs -f master`
+- The master detects disconnections and requeues tasks.
+
+#### Stop Everything
+```
+docker-compose down
+```
+
+### Testing Specific Features
+- **Task Execution**: Monitor logs for task completion (e.g., prime counts or checksums).
+- **Fault Tolerance**: Disconnect workers and verify requeuing.
+- **Performance**: Run with different worker types and measure task distribution.
+- **Unit Tests**: Run test files in `tests/` (e.g., `./test_protocol`).
+
+### Troubleshooting
+- **Port Issues**: Ensure port 9090 is free.
+- **Connection Errors**: Check firewall and network settings.
+- **Build Errors**: Ensure GCC and dependencies are installed.
+- **Docker Issues**: Run `docker system prune` to clean up.
+
+For more details, refer to the architecture sections above. If you encounter issues, check the logs or open an issue. 
+
+---
+
+## License
+[Add license if applicable] 
+
+## Contributors
+- Rayan Alamri (Master Node)
+- Mohammed Alsuhaibani (Worker Execution)
+- Ali Almuzain (Serialization)
+- Mohammed Yar (Dashboard) 
+
+---
+
+---
+
 ## Build Requirements
 
 - C compiler (`gcc` or `clang`)

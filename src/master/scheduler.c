@@ -9,6 +9,7 @@
 
 void registry_init(WorkerRegistry *r) {
     memset(r, 0, sizeof(WorkerRegistry));
+    /* sock_fd == -1 marks an unused slot without needing a separate flag. */
     for (int i = 0; i < MAX_WORKERS; i++)
         r->workers[i].sock_fd = -1;
     r->count    = 0;
@@ -22,6 +23,10 @@ int registry_add(WorkerRegistry *r, uint32_t worker_id, int sock_fd) {
         pthread_mutex_unlock(&r->lock);
         return -1;
     }
+    /*
+     * Reuse the first free array slot instead of compacting the table. This
+     * keeps worker pointers stable while other threads inspect the registry.
+     */
     for (int i = 0; i < MAX_WORKERS; i++) {
         if (r->workers[i].sock_fd == -1) {
             memset(&r->workers[i], 0, sizeof(WorkerInfo));
@@ -90,6 +95,10 @@ static void *scheduler_loop(void *arg) {
     NetworkPayload task;
 
     while (s->running) {
+        /*
+         * Use a non-blocking dequeue so scheduler_stop() can end the thread
+         * without needing to inject a sentinel task into the queue.
+         */
         if (queue_dequeue_nowait(s->queue, &task) != 0) {
             usleep(5000); /* 5 ms — no work to do */
             continue;
@@ -105,6 +114,10 @@ static void *scheduler_loop(void *arg) {
             continue;
         }
 
+        /*
+         * Mark the worker busy before sending. If the socket fails afterward,
+         * the task is requeued and the worker is removed from scheduling.
+         */
         WorkerInfo *w = &s->registry->workers[idx];
         w->status       = WORKER_BUSY;
         w->current_task = task;
@@ -118,6 +131,10 @@ static void *scheduler_loop(void *arg) {
         payload_to_net(&pkt);
 
         if (send_full(fd, &pkt, sizeof(pkt)) != 0) {
+            /*
+             * Send failure means the worker cannot be trusted to complete the
+             * task, so preserve at-least-once execution by returning it to FIFO.
+             */
             fprintf(stderr, "[scheduler] send to worker %u failed, requeueing task %u\n",
                     wid, task.task_id);
             queue_requeue(s->queue, &task);
