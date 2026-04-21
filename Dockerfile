@@ -13,5 +13,6 @@ FROM alpine:3.20
 
 RUN apk add --no-cache libgcc
 
-COPY --from=builder /app/bin/master /usr/local/bin/master
-COPY --from=builder /app/bin/worker /usr/local/bin/worker
+COPY --from=builder /app/bin/master  /usr/local/bin/master
+COPY --from=builder /app/bin/worker  /usr/local/bin/worker
+COPY --from=builder /app/bin/submit  /usr/local/bin/submit

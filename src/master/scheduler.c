@@ -7,6 +7,12 @@
 
 /* ── WorkerRegistry ─────────────────────────────────────────────────────── */
 
+/**
+ * registry_init initializes the WorkerRegistry.
+ * Sets all slots to unused and initializes the mutex.
+ *
+ * @param r Pointer to WorkerRegistry.
+ */
 void registry_init(WorkerRegistry *r) {
     memset(r, 0, sizeof(WorkerRegistry));
     /* sock_fd == -1 marks an unused slot without needing a separate flag. */
@@ -129,6 +135,9 @@ static void *scheduler_loop(void *arg) {
         pkt.type      = MSG_TASK;
         pkt.worker_id = wid;
         payload_to_net(&pkt);
+
+        printf("[scheduler] task=%u cmd=%u arg=%u -> worker=%u\n",
+               task.task_id, task.command_code, task.argument, wid);
 
         if (send_full(fd, &pkt, sizeof(pkt)) != 0) {
             /*

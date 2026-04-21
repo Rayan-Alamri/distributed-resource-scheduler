@@ -8,7 +8,8 @@ typedef enum {
     MSG_HEARTBEAT = 0,
     MSG_TASK      = 1,
     MSG_RESULT    = 2,
-    MSG_REGISTER  = 3
+    MSG_REGISTER  = 3,
+    MSG_SUBMIT    = 4   /* identifies a submit client — never added to worker registry */
 } MessageType;
 
 typedef enum {

@@ -13,12 +13,26 @@
 
 /* ── Per-worker thread ───────────────────────────────────────────────────── */
 
+/**
+ * WorkerArg struct holds arguments for the worker thread.
+ * - sock_fd: Socket file descriptor for communication with the worker.
+ * - worker_id: Unique ID assigned to the worker.
+ * - ms: Pointer to the MasterState for accessing shared resources.
+ */
 typedef struct {
     int          sock_fd;
     uint32_t     worker_id;
     MasterState *ms;
 } WorkerArg;
 
+/**
+ * worker_thread function handles communication with a single worker.
+ * It processes incoming messages (heartbeats, results), manages task assignment,
+ * and handles disconnection by requeueing orphaned tasks.
+ *
+ * @param arg Pointer to WorkerArg struct.
+ * @return NULL
+ */
 static void *worker_thread(void *arg) {
     WorkerArg   *wa  = (WorkerArg *)arg;
     int          fd  = wa->sock_fd;
@@ -163,6 +177,28 @@ void server_run(MasterState *ms) {
             continue;
         }
         payload_to_host(&reg);
+
+        if ((MessageType)reg.type == MSG_SUBMIT) {
+            /*
+             * Submit clients are never added to the worker registry. Read their
+             * MSG_TASK packets directly here and enqueue each one, then close.
+             */
+            printf("[master] submit client connected from %s\n",
+                   inet_ntoa(client_addr.sin_addr));
+            NetworkPayload task;
+            while (recv_full(cfd, &task, sizeof(task)) == 0) {
+                payload_to_host(&task);
+                if ((MessageType)task.type == MSG_TASK) {
+                    printf("[master] submit: task_id=%u cmd=%u arg=%u\n",
+                           task.task_id, task.command_code, task.argument);
+                    queue_enqueue(&ms->queue, &task);
+                }
+            }
+            printf("[master] submit client disconnected\n");
+            close(cfd);
+            continue;
+        }
+
         if ((MessageType)reg.type != MSG_REGISTER) {
             fprintf(stderr, "[master] expected MSG_REGISTER, got type %u — dropping\n",
                     reg.type);

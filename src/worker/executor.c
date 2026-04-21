@@ -7,6 +7,13 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+/**
+ * count_primes function calculates the number of prime numbers up to a given limit.
+ * Uses trial division for efficiency.
+ *
+ * @param limit The upper limit for prime counting.
+ * @return The count of prime numbers <= limit.
+ */
 static uint32_t count_primes(uint32_t limit) {
     uint32_t count = 0;
 
@@ -49,6 +56,15 @@ static uint32_t matrix_checksum(uint32_t size) {
     return checksum;
 }
 
+/**
+ * execute_workload function dispatches the task based on command_code.
+ * Command 1: Prime counting
+ * Command 2: Matrix checksum
+ *
+ * @param command_code The type of workload (1 or 2).
+ * @param argument The input parameter for the workload.
+ * @return The computed result.
+ */
 static uint32_t execute_workload(uint32_t command_code, uint32_t argument) {
     switch (command_code) {
     case 1:

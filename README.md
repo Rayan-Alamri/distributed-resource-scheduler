@@ -268,7 +268,7 @@ This section provides step-by-step instructions to build, run, and test the dist
    ```
    make all
    ```
-   - This generates `bin/master` and `bin/worker` executables.
+   - This generates `bin/master`, `bin/worker`, and `bin/submit` executables.
 
 ### Running Locally (Without Containers)
 #### Start the Master
@@ -298,50 +298,207 @@ This section provides step-by-step instructions to build, run, and test the dist
 - Test fault tolerance: Kill a worker process—the master should requeue tasks and mark it offline.
 
 ### Running with Docker (Containerized Simulation)
-For easier testing and simulation of multiple devices (e.g., Raspberry Pis), use Docker.
 
-#### Build Images
-```
-docker-compose build
-```
+Docker lets you run the entire distributed system on a single machine. Each component runs in its own isolated container connected through a virtual network — no physical Raspberry Pis needed.
 
-#### Run with Scaling
-- Start the master and scale workers:
-  ```
-  ./scale_workers.sh <rpi3_count> <rpi4_count> <rpi5_count>
-  ```
-  - Example: `./scale_workers.sh 2 1 1` (2 RPi3, 1 RPi4, 1 RPi5 workers with resource limits).
+#### What runs inside Docker
 
-- Or manually:
-  ```
-  docker-compose up master
-  ./manage_workers.sh add rpi3 2
-  ```
+| Container | Role | Simulates |
+|-----------|------|-----------|
+| `master` | Receives tasks, schedules them to workers | Central controller |
+| `worker_rpi3` | Executes tasks (1 CPU, 512 MB) | Raspberry Pi 3 |
+| `worker_rpi4` | Executes tasks (2 CPU, 1 GB) | Raspberry Pi 4 |
+| `worker_rpi5` | Executes tasks (4 CPU, 2 GB) | Raspberry Pi 5 |
+| `submit` | One-shot client to inject tasks | External user/client |
 
-#### Dynamic Connect/Disconnect Simulation
-- Add workers: `./manage_workers.sh add <type> <count>`
-- Remove workers: `./manage_workers.sh remove <container_name>`
-- Check logs: `docker-compose logs -f master`
-- The master detects disconnections and requeues tasks.
+---
 
-#### Stop Everything
-```
-docker-compose down
+#### Prerequisites
+
+Install Docker Desktop from https://www.docker.com/products/docker-desktop and make sure it is running. Verify with:
+
+```bash
+docker --version
+docker compose version
 ```
 
-### Testing Specific Features
-- **Task Execution**: Monitor logs for task completion (e.g., prime counts or checksums).
-- **Fault Tolerance**: Disconnect workers and verify requeuing.
-- **Performance**: Run with different worker types and measure task distribution.
-- **Unit Tests**: Run test files in `tests/` (e.g., `./test_protocol`).
+You should see version numbers printed for both. If not, Docker is not installed or not running.
 
-### Troubleshooting
-- **Port Issues**: Ensure port 9090 is free.
-- **Connection Errors**: Check firewall and network settings.
-- **Build Errors**: Ensure GCC and dependencies are installed.
-- **Docker Issues**: Run `docker system prune` to clean up.
+---
 
-For more details, refer to the architecture sections above. If you encounter issues, check the logs or open an issue. 
+#### Step 1 — Build the images
+
+This compiles the C code and packages it into Docker images. Run this once, and again any time you change the source code.
+
+```bash
+docker compose build
+```
+
+---
+
+#### Step 2 — Start the cluster
+
+```bash
+docker compose up -d
+```
+
+The `-d` flag runs everything in the background. This starts 4 containers: master + 3 workers.
+
+To confirm all containers are running:
+
+```bash
+docker compose ps
+```
+
+You should see `master`, `worker_rpi3`, `worker_rpi4`, and `worker_rpi5` all with status `running`.
+
+---
+
+#### Step 3 — Watch the logs
+
+Open a terminal and run:
+
+```bash
+docker compose logs -f
+```
+
+This streams live output from all containers, color-coded by service name. You will see:
+- Workers connecting and registering with the master
+- 6 demo tasks automatically submitted after 3 seconds
+- The scheduler assigning each task to a worker (e.g. `task=1 -> worker=2`)
+- Results coming back (e.g. `result: worker=2 task=1 result=348513`)
+
+To watch only one container:
+
+```bash
+docker compose logs -f master
+docker compose logs -f worker_rpi3
+docker compose logs -f worker_rpi4
+docker compose logs -f worker_rpi5
+```
+
+Press `Ctrl+C` to stop following logs. The containers keep running.
+
+---
+
+#### Step 4 — Submit tasks
+
+Open a second terminal and use the `submit` client to send tasks to the running cluster.
+
+**Option A: run submit directly from your terminal**
+
+```bash
+# 1 prime task with default argument (5 million)
+docker compose run --rm submit
+
+# 5 prime tasks, count primes up to 100 million (heavier load)
+docker compose run --rm submit -c 1 -n 5 -a 100000000
+
+# 2 matrix tasks
+docker compose run --rm submit -c 2 -a 1000 -n 2
+```
+
+`--rm` automatically removes the submit container after it exits (it is a one-shot tool).
+
+**Option B: go inside a container and submit interactively**
+
+```bash
+# open a shell inside the master container
+docker exec -it distributed-resource-scheduler-master-1 sh
+
+# now run submit as many times as you want
+submit -c 1 -n 5 -a 100000000
+submit -c 2 -a 500 -n 3
+submit -a 4000000000 -n 1
+
+# leave the container (master keeps running)
+exit
+```
+
+**Submit flags reference:**
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `-n COUNT` | Number of tasks to send | `1` |
+| `-c CMD` | Workload type: `1`=prime counting, `2`=matrix checksum | `1` |
+| `-a ARG` | Input to the computation (see note below) | `5000000` |
+| `-i ID` | Starting task ID (to avoid collisions with demo tasks) | `100` |
+| `-h HOST` | Master hostname | `master` |
+| `-p PORT` | Master port | `9090` |
+
+**What `-a ARG` means per workload:**
+- `-c 1` (prime): counts all prime numbers from 2 up to `ARG`. Larger = slower. `5000000` takes ~1s, `100000000` takes ~1 min per worker.
+- `-c 2` (matrix): computes a checksum over an `ARG × ARG` matrix. `ARG=1000` means a 1000×1000 matrix.
+
+The maximum value for `-a` is `4294967295` (~4.3 billion).
+
+---
+
+#### Step 5 — Test fault tolerance
+
+You can simulate a worker failure by stopping a container while tasks are running:
+
+```bash
+# submit some slow tasks first so workers stay busy
+docker compose run --rm submit -c 1 -n 10 -a 100000000
+
+# then kill a worker
+docker stop distributed-resource-scheduler-worker_rpi3-1
+```
+
+Watch the logs — the master will detect the disconnection and requeue the orphaned task so another worker picks it up.
+
+To bring the worker back:
+
+```bash
+docker start distributed-resource-scheduler-worker_rpi3-1
+```
+
+---
+
+#### Step 6 — Stop everything
+
+```bash
+docker compose down
+```
+
+This stops and removes all containers and the virtual network. Your images are kept so you do not need to rebuild next time, only run `docker compose up -d` again.
+
+---
+
+#### Full command reference
+
+```bash
+docker compose build                  # build/rebuild images
+docker compose up -d                  # start the cluster in background
+docker compose ps                     # check container status
+docker compose logs -f                # stream all logs
+docker compose logs -f master         # stream master logs only
+docker compose run --rm submit [flags]  # submit tasks
+docker exec -it <container> sh        # open a shell inside a container
+docker compose down                   # stop and remove everything
+```
+
+---
+
+#### Troubleshooting
+
+**"Cannot connect to the Docker daemon"**
+Docker Desktop is not running. Open it and wait for it to start.
+
+**"port is already allocated"**
+Something on your machine is already using port 9090. Either stop that process or change `MASTER_PORT` in `docker-compose.yml` and rebuild.
+
+**Submit says "cannot resolve master"**
+The submit container started before the master was ready. Wait a few seconds and try again.
+
+**Want to start fresh?**
+```bash
+docker compose down
+docker system prune -f
+docker compose build
+docker compose up -d
+```
 
 ---
 

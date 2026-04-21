@@ -13,6 +13,9 @@ WORKER_SRCS = src/worker/client.c \
               src/worker/executor.c \
               src/shared/protocol.c
 
+SUBMIT_SRCS = src/client/submit.c \
+              src/shared/protocol.c
+
 TEST_SCHED_SRCS = tests/test_scheduler.c \
                   src/master/queue_mgr.c \
                   src/master/scheduler.c \
@@ -22,15 +25,18 @@ TEST_WORKER_SRCS = tests/test_worker_executor.c \
                    src/worker/executor.c \
                    src/shared/protocol.c
 
-.PHONY: all master worker test_scheduler test_worker test clean
+.PHONY: all master worker submit test_scheduler test_worker test clean
 
-all: master worker
+all: master worker submit
 
 master: $(MASTER_SRCS) | bin
 	$(CC) $(CFLAGS) -o bin/master $(MASTER_SRCS)
 
 worker: $(WORKER_SRCS) | bin
 	$(CC) $(CFLAGS) -o bin/worker $(WORKER_SRCS)
+
+submit: $(SUBMIT_SRCS) | bin
+	$(CC) $(CFLAGS) -o bin/submit $(SUBMIT_SRCS)
 
 test_scheduler: $(TEST_SCHED_SRCS) | bin
 	$(CC) $(CFLAGS) -o bin/test_scheduler $(TEST_SCHED_SRCS)

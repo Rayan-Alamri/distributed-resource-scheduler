@@ -61,6 +61,23 @@ services:
           cpus: '2.0'
           memory: 1G
 
+  submit:
+    build: .
+    entrypoint: submit
+    depends_on:
+      - master
+    networks:
+      - scheduler-net
+    environment:
+      SUBMIT_HOST:     "master"
+      SUBMIT_PORT:     "9090"
+      SUBMIT_COUNT:    "1"
+      SUBMIT_CMD:      "1"
+      SUBMIT_ARG:      "5000000"
+      SUBMIT_START_ID: "100"
+    profiles:
+      - tools
+
 networks:
   scheduler-net:
     driver: bridge
