@@ -12,6 +12,10 @@ typedef struct {
     WorkerStatus   status;
     NetworkPayload current_task;   /* full task snapshot for requeue on disconnect */
     time_t         last_heartbeat;
+    /* runtime metrics — updated by scheduler (assign) and server (result) */
+    uint32_t       tasks_completed;
+    uint64_t       total_runtime_ms;
+    time_t         task_started_at;
 } WorkerInfo;
 
 typedef struct {

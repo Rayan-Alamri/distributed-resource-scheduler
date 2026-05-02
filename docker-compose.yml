@@ -4,9 +4,17 @@ services:
     command: master
     environment:
       MASTER_PORT: "9090"
-      DEMO_TASKS: "6"
+      DEMO_TASKS: "0"
     ports:
       - "9090:9090"
+    volumes:
+      - ./videos:/videos
+      - ./logs:/logs
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
     networks:
       - scheduler-net
 
@@ -15,6 +23,16 @@ services:
     command: worker master 9090
     depends_on:
       - master
+    environment:
+      VIDEO_DIR: "/videos"
+    volumes:
+      - ./videos:/videos
+      - ./logs:/logs
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
     networks:
       - scheduler-net
     restart: on-failure
@@ -32,6 +50,16 @@ services:
     command: worker master 9090
     depends_on:
       - master
+    environment:
+      VIDEO_DIR: "/videos"
+    volumes:
+      - ./videos:/videos
+      - ./logs:/logs
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
     networks:
       - scheduler-net
     restart: on-failure
@@ -49,6 +77,16 @@ services:
     command: worker master 9090
     depends_on:
       - master
+    environment:
+      VIDEO_DIR: "/videos"
+    volumes:
+      - ./videos:/videos
+      - ./logs:/logs
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
     networks:
       - scheduler-net
     restart: on-failure
@@ -66,6 +104,8 @@ services:
     entrypoint: submit
     depends_on:
       - master
+    volumes:
+      - ./videos:/videos
     networks:
       - scheduler-net
     environment:

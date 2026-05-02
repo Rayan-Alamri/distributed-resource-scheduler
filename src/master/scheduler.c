@@ -5,6 +5,40 @@
 #include <unistd.h>
 #include <time.h>
 
+static const char *now(void) {
+    static char buf[9];
+    time_t t = time(NULL);
+    struct tm tm;
+    localtime_r(&t, &tm);
+    strftime(buf, sizeof(buf), "%H:%M:%S", &tm);
+    return buf;
+}
+
+static const char *cmd_name(uint32_t cmd) {
+    switch ((CommandCode)cmd) {
+    case CMD_PRIME:          return "prime";
+    case CMD_MATRIX:         return "matrix";
+    case CMD_PRIME_RANGE:    return "prime_range";
+    case CMD_MONTE_CARLO:    return "monte_carlo";
+    case CMD_MANDELBROT:     return "mandelbrot";
+    case CMD_FFMPEG_SEGMENT: return "ffmpeg_segment";
+    case CMD_FFMPEG_SCRIPT:  return "ffmpeg_script";
+    default:                 return "unknown";
+    }
+}
+
+static void print_task_fields(const NetworkPayload *task) {
+    if ((CommandCode)task->command_code == CMD_PRIME_RANGE) {
+        printf("task_id=%u cmd=%u(%s) arg=%u range_end=%u",
+               task->task_id, task->command_code, cmd_name(task->command_code),
+               task->argument, task->result);
+    } else {
+        printf("task_id=%u cmd=%u(%s) arg=%u",
+               task->task_id, task->command_code, cmd_name(task->command_code),
+               task->argument);
+    }
+}
+
 /* ── WorkerRegistry ─────────────────────────────────────────────────────── */
 
 /**
@@ -73,16 +107,27 @@ void registry_set_offline(WorkerRegistry *r, uint32_t worker_id) {
     pthread_mutex_unlock(&r->lock);
 }
 
-/* Caller must hold r->lock. Advances rr_index for round-robin fairness. */
+/* Caller must hold r->lock.
+ * Selects the idle worker with the fewest completed tasks (least-loaded).
+ * Ties are broken by rr_index so no single worker is always preferred. */
 int registry_find_idle(WorkerRegistry *r) {
+    int best_idx   = -1;
+    uint32_t best  = UINT32_MAX;
+
     for (int i = 0; i < MAX_WORKERS; i++) {
         int idx = (r->rr_index + i) % MAX_WORKERS;
-        if (r->workers[idx].sock_fd != -1 && r->workers[idx].status == WORKER_IDLE) {
-            r->rr_index = (idx + 1) % MAX_WORKERS;
-            return idx;
+        WorkerInfo *w = &r->workers[idx];
+        if (w->sock_fd == -1 || w->status != WORKER_IDLE) continue;
+        if (best_idx == -1 || w->tasks_completed < best) {
+            best_idx = idx;
+            best     = w->tasks_completed;
         }
     }
-    return -1;
+
+    if (best_idx != -1)
+        r->rr_index = (best_idx + 1) % MAX_WORKERS;
+
+    return best_idx;
 }
 
 /* Caller must hold r->lock. */
@@ -125,8 +170,11 @@ static void *scheduler_loop(void *arg) {
          * the task is requeued and the worker is removed from scheduling.
          */
         WorkerInfo *w = &s->registry->workers[idx];
-        w->status       = WORKER_BUSY;
-        w->current_task = task;
+        uint32_t completed = w->tasks_completed;
+        uint64_t avg_ms = completed > 0 ? w->total_runtime_ms / completed : 0ULL;
+        w->status          = WORKER_BUSY;
+        w->current_task    = task;
+        w->task_started_at = time(NULL);
         int      fd  = w->sock_fd;
         uint32_t wid = w->worker_id;
         pthread_mutex_unlock(&s->registry->lock);
@@ -136,16 +184,18 @@ static void *scheduler_loop(void *arg) {
         pkt.worker_id = wid;
         payload_to_net(&pkt);
 
-        printf("[scheduler] task=%u cmd=%u arg=%u -> worker=%u\n",
-               task.task_id, task.command_code, task.argument, wid);
+        printf("[%s][scheduler] dispatch: ", now());
+        print_task_fields(&task);
+        printf(" -> worker=%u worker_completed=%u worker_avg=%llums queue_depth=%d\n",
+               wid, completed, (unsigned long long)avg_ms, queue_size(s->queue));
 
         if (send_full(fd, &pkt, sizeof(pkt)) != 0) {
             /*
              * Send failure means the worker cannot be trusted to complete the
              * task, so preserve at-least-once execution by returning it to FIFO.
              */
-            fprintf(stderr, "[scheduler] send to worker %u failed, requeueing task %u\n",
-                    wid, task.task_id);
+            fprintf(stderr, "[%s][scheduler] send to worker %u failed, requeueing task %u\n",
+                    now(), wid, task.task_id);
             queue_requeue(s->queue, &task);
             registry_set_offline(s->registry, wid);
         }

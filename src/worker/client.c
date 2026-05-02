@@ -12,7 +12,54 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <time.h>
 #include <unistd.h>
+
+static const char *now(void) {
+    static char buf[9];
+    time_t t = time(NULL);
+    struct tm tm;
+    localtime_r(&t, &tm);
+    strftime(buf, sizeof(buf), "%H:%M:%S", &tm);
+    return buf;
+}
+
+static const char *cmd_name(uint32_t cmd) {
+    switch ((CommandCode)cmd) {
+    case CMD_PRIME:          return "prime";
+    case CMD_MATRIX:         return "matrix";
+    case CMD_PRIME_RANGE:    return "prime_range";
+    case CMD_MONTE_CARLO:    return "monte_carlo";
+    case CMD_MANDELBROT:     return "mandelbrot";
+    case CMD_FFMPEG_SEGMENT: return "ffmpeg_segment";
+    case CMD_FFMPEG_SCRIPT:  return "ffmpeg_script";
+    default:                 return "unknown";
+    }
+}
+
+static uint64_t elapsed_ms(const struct timespec *start, const struct timespec *end) {
+    time_t sec = end->tv_sec - start->tv_sec;
+    long nsec = end->tv_nsec - start->tv_nsec;
+
+    if (nsec < 0) {
+        sec--;
+        nsec += 1000000000L;
+    }
+
+    return (uint64_t)sec * 1000ULL + (uint64_t)nsec / 1000000ULL;
+}
+
+static void print_task_fields(const NetworkPayload *task) {
+    if ((CommandCode)task->command_code == CMD_PRIME_RANGE) {
+        printf("task_id=%u cmd=%u(%s) arg=%u range_end=%u",
+               task->task_id, task->command_code, cmd_name(task->command_code),
+               task->argument, task->result);
+    } else {
+        printf("task_id=%u cmd=%u(%s) arg=%u",
+               task->task_id, task->command_code, cmd_name(task->command_code),
+               task->argument);
+    }
+}
 
 typedef struct {
     int sock_fd;
@@ -175,7 +222,7 @@ static void *heartbeat_loop(void *arg) {
          * Shutting down the socket wakes the main recv loop so cleanup can run.
          */
         if (send_payload_locked(rt, &payload) != 0) {
-            fprintf(stderr, "[worker] heartbeat send failed; master may be disconnected\n");
+            fprintf(stderr, "[%s][worker] heartbeat send failed; master may be disconnected\n", now());
             runtime_stop(rt);
             shutdown(rt->sock_fd, SHUT_RDWR);
             break;
@@ -188,27 +235,47 @@ static void *heartbeat_loop(void *arg) {
 static int execute_and_send_task(WorkerRuntime *rt, const NetworkPayload *task) {
     uint32_t result = 0;
     int exec_status;
+    struct timespec start;
+    struct timespec end;
+    uint32_t worker_id = runtime_get_worker_id(rt);
 
-    printf("[worker] received task=%u command=%u argument=%u\n",
-           task->task_id, task->command_code, task->argument);
+    clock_gettime(CLOCK_MONOTONIC, &start);
+
+    printf("[%s][worker] task_started: worker=%u ", now(), worker_id);
+    print_task_fields(task);
+    printf("\n");
 
     /*
      * executor_run_task forks the real workload. The networking thread stays in
      * this process, so a bad workload cannot corrupt the worker's socket state.
      */
     exec_status = executor_run_task(task, &result);
+    clock_gettime(CLOCK_MONOTONIC, &end);
     if (exec_status != EXECUTOR_OK) {
-        fprintf(stderr, "[worker] task %u failed locally with status %d\n",
-                task->task_id, exec_status);
+        fprintf(stderr, "[%s][worker] task_failed: worker=%u task_id=%u"
+                " status=%d duration=%llums\n",
+                now(), worker_id, task->task_id, exec_status,
+                (unsigned long long)elapsed_ms(&start, &end));
         result = 0;
     }
 
+    printf("[%s][worker] task_finished: worker=%u task_id=%u cmd=%u(%s)"
+           " result=%u duration=%llums local_status=%s\n",
+           now(), worker_id, task->task_id, task->command_code,
+           cmd_name(task->command_code), result,
+           (unsigned long long)elapsed_ms(&start, &end),
+           exec_status == EXECUTOR_OK ? "ok" : "failed");
+
     if (send_result(rt, task, result) != 0) {
-        fprintf(stderr, "[worker] failed to send result for task %u\n", task->task_id);
+        fprintf(stderr, "[%s][worker] result_send_failed: worker=%u task_id=%u\n",
+                now(), worker_id, task->task_id);
         return -1;
     }
 
-    printf("[worker] sent result: task=%u result=%u\n", task->task_id, result);
+    printf("[%s][worker] task_completed: worker=%u task_id=%u result=%u"
+           " duration=%llums result_sent=yes\n",
+           now(), worker_id, task->task_id, result,
+           (unsigned long long)elapsed_ms(&start, &end));
     return 0;
 }
 
@@ -274,7 +341,7 @@ static int dispatch_task(WorkerRuntime *rt, const NetworkPayload *task) {
 
     tta = malloc(sizeof(*tta));
     if (!tta) {
-        fprintf(stderr, "[worker] malloc failed for task thread argument\n");
+        fprintf(stderr, "[%s][worker] malloc failed for task thread argument\n", now());
         return execute_and_send_task(rt, task);
     }
 
@@ -284,8 +351,8 @@ static int dispatch_task(WorkerRuntime *rt, const NetworkPayload *task) {
     runtime_task_started(rt);
     create_status = pthread_create(&tid, NULL, task_thread_main, tta);
     if (create_status != 0) {
-        fprintf(stderr, "[worker] pthread_create failed for task %u; running inline\n",
-                task->task_id);
+        fprintf(stderr, "[%s][worker] pthread_create failed for task %u; running inline\n",
+                now(), task->task_id);
         runtime_task_finished(rt);
         free(tta);
         return execute_and_send_task(rt, task);
@@ -308,8 +375,8 @@ int worker_run(const WorkerConfig *config) {
     memset(&rt, 0, sizeof(rt));
     rt.sock_fd = worker_connect(config->host, config->port);
     if (rt.sock_fd < 0) {
-        fprintf(stderr, "[worker] failed to connect to master at %s:%d\n",
-                config->host, config->port);
+        fprintf(stderr, "[%s][worker] failed to connect to master at %s:%d\n",
+                now(), config->host, config->port);
         return 1;
     }
 
@@ -320,20 +387,22 @@ int worker_run(const WorkerConfig *config) {
     pthread_mutex_init(&rt.task_lock, NULL);
     pthread_cond_init(&rt.tasks_done, NULL);
 
-    printf("[worker] connected to master at %s:%d\n", config->host, config->port);
+    printf("[%s][worker] connected to master at %s:%d\n", now(), config->host, config->port);
 
     if (send_register(&rt) != 0) {
-        fprintf(stderr, "[worker] registration send failed\n");
+        fprintf(stderr, "[%s][worker] registration send failed\n", now());
         status = 1;
         goto cleanup;
     }
+    printf("[%s][worker] registration sent requested_worker_id=%u pid=%ld\n",
+           now(), config->worker_id, (long)getpid());
 
     /*
      * Heartbeats run in parallel with task execution, giving the master a
      * simple liveness signal even when workloads are CPU-bound.
      */
     if (pthread_create(&heartbeat_thread, NULL, heartbeat_loop, &rt) != 0) {
-        fprintf(stderr, "[worker] failed to start heartbeat thread\n");
+        fprintf(stderr, "[%s][worker] failed to start heartbeat thread\n", now());
         status = 1;
         goto cleanup;
     }
@@ -343,7 +412,7 @@ int worker_run(const WorkerConfig *config) {
         NetworkPayload payload;
 
         if (recv_full(rt.sock_fd, &payload, sizeof(payload)) != 0) {
-            fprintf(stderr, "[worker] master disconnected\n");
+            fprintf(stderr, "[%s][worker] master disconnected\n", now());
             runtime_stop(&rt);
             break;
         }
@@ -352,13 +421,19 @@ int worker_run(const WorkerConfig *config) {
         payload_to_host(&payload);
         switch ((MessageType)payload.type) {
         case MSG_TASK:
+            if (payload.worker_id != 0)
+                runtime_set_worker_id(&rt, payload.worker_id);
+            printf("[%s][worker] task_received: worker=%u ",
+                   now(), runtime_get_worker_id(&rt));
+            print_task_fields(&payload);
+            printf("\n");
             if (dispatch_task(&rt, &payload) != 0) {
                 runtime_stop(&rt);
                 status = 1;
             }
             break;
         default:
-            fprintf(stderr, "[worker] unexpected message type %u from master\n", payload.type);
+            fprintf(stderr, "[%s][worker] unexpected message type %u from master\n", now(), payload.type);
             break;
         }
     }
@@ -379,6 +454,9 @@ cleanup:
 
 int main(int argc, char **argv) {
     WorkerConfig config;
+
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
 
     signal(SIGPIPE, SIG_IGN);
 

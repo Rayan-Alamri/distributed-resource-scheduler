@@ -21,7 +21,32 @@
       "Bash(pdflatex -interaction=nonstopmode docs/progress_report.tex)",
       "Read(//usr/share/texlive/**)",
       "Bash(sudo apt-get *)",
-      "Bash(sudo -S apt-get install -y texlive-latex-extra texlive-pictures)"
+      "Bash(sudo -S apt-get install -y texlive-latex-extra texlive-pictures)",
+      "Bash(ffmpeg -version)",
+      "Bash(docker --version)",
+      "Bash(./bin/master)",
+      "Bash(./bin/submit -h 127.0.0.1 -c 1 -n 2 -a 100000 -i 1)",
+      "Bash(./bin/submit -h 127.0.0.1 -c 2 -n 2 -a 200 -i 10)",
+      "Bash(./bin/submit -h 127.0.0.1 -c 3 -n 4 -a 1 -s 1000000 -i 20)",
+      "Bash(./bin/submit -h 127.0.0.1 -c 4 -n 2 -a 500000 -i 30)",
+      "Bash(./bin/submit -h 127.0.0.1 -c 5 -n 3 -a 0 -s 100 -i 40)",
+      "Bash(jobs -l)",
+      "Bash(./bin/worker 127.0.0.1 9090)",
+      "Bash(./bin/submit -h 127.0.0.1 -c 1 -n 2 -a 50000 -i 1)",
+      "Bash(./bin/submit -h 127.0.0.1 -c 2 -n 2 -a 100 -i 10)",
+      "Read(//tmp/**)",
+      "Bash(python3 *)",
+      "Bash(ffmpeg -y -f lavfi -i testsrc=duration=15:size=320x240:rate=10 -c:v libx264 -preset fast videos/input/input.mp4)",
+      "Bash(SEGMENT_SECS=5 VIDEO_DIR=./videos ./scripts/split_video.sh)",
+      "Bash(ffprobe -v quiet -show_entries format=duration -of csv=p=0 videos/input/input.mp4)",
+      "Bash(ffmpeg -y -f lavfi -i testsrc=duration=30:size=320x240:rate=10 -c:v libx264 -preset fast -g 10 videos/input/input.mp4)",
+      "Bash(echo \"New video: $\\(ffprobe -v quiet -show_entries format=duration -of csv=p=0 videos/input/input.mp4\\)s\")",
+      "Bash(rm -f videos/segments/*.mp4)",
+      "Bash(./bin/submit -h 127.0.0.1 -c 6 -n 6 -a 0 -s 1 -i 300)",
+      "Bash(VIDEO_DIR=./videos ./scripts/merge_video.sh)",
+      "Bash(ffprobe -v quiet -show_entries format=duration,size -of compact videos/final/output.mp4)",
+      "Bash(ffmpeg -y -f concat -safe 0 -i videos/final/list.txt -c copy videos/final/output.mp4)",
+      "Bash(ffprobe -v quiet -show_entries format=duration -of csv=p=0 videos/final/output.mp4)"
     ]
   }
 }

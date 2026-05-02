@@ -11,7 +11,8 @@ RUN make all
 # --- Runtime image ---
 FROM alpine:3.20
 
-RUN apk add --no-cache libgcc
+RUN apk add --no-cache libgcc ffmpeg && \
+    mkdir -p /videos/input /videos/segments /videos/processed /videos/final /videos/jobs
 
 COPY --from=builder /app/bin/master  /usr/local/bin/master
 COPY --from=builder /app/bin/worker  /usr/local/bin/worker
