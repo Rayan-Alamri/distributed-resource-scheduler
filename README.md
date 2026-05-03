@@ -276,7 +276,11 @@ This section provides step-by-step instructions to build, run, and test the dist
    ```
    ./bin/master
    ```
-   - The master listens for worker connections and dispatches demo tasks (6 tasks by default).
+   - Interactive terminals open the ncurses dashboard automatically.
+   - Set `MASTER_DASHBOARD=0` to use plain terminal logs.
+   - Dashboard mode writes master logs to `logs/master.log` by default.
+   - Press `n` in the dashboard to create and submit a task batch.
+   - Press `v` to choose a video from `videos/input`, split it, process every segment, and merge the result.
 
 #### Start Workers
 1. In separate terminals, run workers connecting to the master:

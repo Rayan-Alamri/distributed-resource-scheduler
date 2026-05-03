@@ -19,7 +19,13 @@
 /* Reads VIDEO_DIR env var at runtime; falls back to /videos (the Docker path). */
 static const char *video_dir(void) {
     const char *d = getenv("VIDEO_DIR");
-    return (d && *d) ? d : FFMPEG_VIDEO_DIR_DEFAULT;
+
+    if (d && *d)
+        return d;
+    if (access("./videos", R_OK | X_OK) == 0)
+        return "./videos";
+
+    return FFMPEG_VIDEO_DIR_DEFAULT;
 }
 #define MANDELBROT_WIDTH     800
 #define MANDELBROT_HEIGHT    600

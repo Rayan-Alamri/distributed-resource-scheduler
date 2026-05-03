@@ -1,6 +1,5 @@
 CC     = gcc
 CFLAGS = -Wall -Wextra -g -pthread
-# -lncurses only needed once the dashboard UI is implemented (Mohammed Yar's scope)
 LDFLAGS_NCURSES = -lncurses
 
 MASTER_SRCS = src/master/server.c \
@@ -39,7 +38,7 @@ MASTER_PORT ?= 9090
 all: master worker submit
 
 master: $(MASTER_SRCS) | bin
-	$(CC) $(CFLAGS) -o bin/master $(MASTER_SRCS)
+	$(CC) $(CFLAGS) -o bin/master $(MASTER_SRCS) $(LDFLAGS_NCURSES)
 
 worker: $(WORKER_SRCS) | bin
 	$(CC) $(CFLAGS) -o bin/worker $(WORKER_SRCS)

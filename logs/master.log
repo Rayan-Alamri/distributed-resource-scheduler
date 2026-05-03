@@ -1,0 +1,219 @@
+[21:56:13][master] dashboard mode enabled; logging to logs/master.log
+[21:56:16][master] worker 1 registered from 127.0.0.1
+[21:56:19][master] worker 2 registered from 127.0.0.1
+[21:56:20][master] worker 3 registered from 127.0.0.1
+[21:56:23][master] worker 4 registered from 127.0.0.1
+[22:01:04][master] dashboard mode enabled; logging to logs/master.log
+[22:01:13][master] worker 1 registered from 127.0.0.1
+[22:01:16][master] worker 2 registered from 127.0.0.1
+[22:01:18][master] worker 3 registered from 127.0.0.1
+[22:01:20][master] worker 4 registered from 127.0.0.1
+ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers
+  built with gcc 13 (Ubuntu 13.2.0-23ubuntu3)
+  configuration: --prefix=/usr --extra-version=3ubuntu5 --toolchain=hardened --libdir=/usr/lib/x86_64-linux-gnu --incdir=/usr/include/x86_64-linux-gnu --arch=amd64 --enable-gpl --disable-stripping --disable-omx --enable-gnutls --enable-libaom --enable-libass --enable-libbs2b --enable-libcaca --enable-libcdio --enable-libcodec2 --enable-libdav1d --enable-libflite --enable-libfontconfig --enable-libfreetype --enable-libfribidi --enable-libglslang --enable-libgme --enable-libgsm --enable-libharfbuzz --enable-libmp3lame --enable-libmysofa --enable-libopenjpeg --enable-libopenmpt --enable-libopus --enable-librubberband --enable-libshine --enable-libsnappy --enable-libsoxr --enable-libspeex --enable-libtheora --enable-libtwolame --enable-libvidstab --enable-libvorbis --enable-libvpx --enable-libwebp --enable-libx265 --enable-libxml2 --enable-libxvid --enable-libzimg --enable-openal --enable-opencl --enable-opengl --disable-sndio --enable-libvpl --disable-libmfx --enable-libdc1394 --enable-libdrm --enable-libiec61883 --enable-chromaprint --enable-frei0r --enable-ladspa --enable-libbluray --enable-libjack --enable-libpulse --enable-librabbitmq --enable-librist --enable-libsrt --enable-libssh --enable-libsvtav1 --enable-libx264 --enable-libzmq --enable-libzvbi --enable-lv2 --enable-sdl2 --enable-libplacebo --enable-librav1e --enable-pocketsphinx --enable-librsvg --enable-libjxl --enable-shared
+  libavutil      58. 29.100 / 58. 29.100
+  libavcodec     60. 31.102 / 60. 31.102
+  libavformat    60. 16.100 / 60. 16.100
+  libavdevice    60.  3.100 / 60.  3.100
+  libavfilter     9. 12.100 /  9. 12.100
+  libswscale      7.  5.100 /  7.  5.100
+  libswresample   4. 12.100 /  4. 12.100
+  libpostproc    57.  3.100 / 57.  3.100
+Input #0, mov,mp4,m4a,3gp,3g2,mj2, from './videos/input/Media1.mp4':
+  Metadata:
+    major_brand     : mp42
+    minor_version   : 0
+    compatible_brands: mp41isom
+    creation_time   : 2026-05-02T04:40:06.000000Z
+  Duration: 00:04:21.33, start: 0.000000, bitrate: 1885 kb/s
+  Stream #0:0[0x1](und): Video: h264 (Baseline) (avc1 / 0x31637661), yuv420p(tv, progressive), 1920x1080 [SAR 1:1 DAR 16:9], 1754 kb/s, 10 fps, 10 tbr, 10k tbn (default)
+    Metadata:
+      creation_time   : 2026-05-02T04:40:06.000000Z
+      handler_name    : VideoHandler
+      vendor_id       : [0][0][0][0]
+      encoder         : AVC Coding
+  Stream #0:1[0x2](und): Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, mono, fltp, 127 kb/s (default)
+    Metadata:
+      creation_time   : 2026-05-02T04:40:06.000000Z
+      handler_name    : SoundHandler
+      vendor_id       : [0][0][0][0]
+[segment @ 0x570e49c3f680] Opening './videos/segments/part_000.mp4' for writing
+Output #0, segment, to './videos/segments/part_%03d.mp4':
+  Metadata:
+    major_brand     : mp42
+    minor_version   : 0
+    compatible_brands: mp41isom
+    encoder         : Lavf60.16.100
+  Stream #0:0(und): Video: h264 (Baseline) (avc1 / 0x31637661), yuv420p(tv, progressive), 1920x1080 [SAR 1:1 DAR 16:9], q=2-31, 1754 kb/s, 10 fps, 10 tbr, 15360 tbn (default)
+    Metadata:
+      creation_time   : 2026-05-02T04:40:06.000000Z
+      handler_name    : VideoHandler
+      vendor_id       : [0][0][0][0]
+      encoder         : AVC Coding
+  Stream #0:1(und): Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, mono, fltp, 127 kb/s (default)
+    Metadata:
+      creation_time   : 2026-05-02T04:40:06.000000Z
+      handler_name    : SoundHandler
+      vendor_id       : [0][0][0][0]
+Stream mapping:
+  Stream #0:0 -> #0:0 (copy)
+  Stream #0:1 -> #0:1 (copy)
+Press [q] to stop, [?] for help
+size=       0kB time=00:00:00.00 bitrate=N/A speed=N/A    [segment @ 0x570e49c3f680] Opening './videos/segments/part_001.mp4' for writing
+[segment @ 0x570e49c3f680] Opening './videos/segments/part_002.mp4' for writing
+[segment @ 0x570e49c3f680] Opening './videos/segments/part_003.mp4' for writing
+[segment @ 0x570e49c3f680] Opening './videos/segments/part_004.mp4' for writing
+[segment @ 0x570e49c3f680] Opening './videos/segments/part_005.mp4' for writing
+[segment @ 0x570e49c3f680] Opening './videos/segments/part_006.mp4' for writing
+[segment @ 0x570e49c3f680] Opening './videos/segments/part_007.mp4' for writing
+[segment @ 0x570e49c3f680] Opening './videos/segments/part_008.mp4' for writing
+[segment @ 0x570e49c3f680] Opening './videos/segments/part_009.mp4' for writing
+size=N/A time=00:01:41.40 bitrate=N/A speed= 203x    [segment @ 0x570e49c3f680] Opening './videos/segments/part_010.mp4' for writing
+[segment @ 0x570e49c3f680] Opening './videos/segments/part_011.mp4' for writing
+[segment @ 0x570e49c3f680] Opening './videos/segments/part_012.mp4' for writing
+[segment @ 0x570e49c3f680] Opening './videos/segments/part_013.mp4' for writing
+[segment @ 0x570e49c3f680] Opening './videos/segments/part_014.mp4' for writing
+[segment @ 0x570e49c3f680] Opening './videos/segments/part_015.mp4' for writing
+[segment @ 0x570e49c3f680] Opening './videos/segments/part_016.mp4' for writing
+[segment @ 0x570e49c3f680] Opening './videos/segments/part_017.mp4' for writing
+[segment @ 0x570e49c3f680] Opening './videos/segments/part_018.mp4' for writing
+[segment @ 0x570e49c3f680] Opening './videos/segments/part_019.mp4' for writing
+size=N/A time=00:03:19.10 bitrate=N/A speed= 199x    [segment @ 0x570e49c3f680] Opening './videos/segments/part_020.mp4' for writing
+[segment @ 0x570e49c3f680] Opening './videos/segments/part_021.mp4' for writing
+[segment @ 0x570e49c3f680] Opening './videos/segments/part_022.mp4' for writing
+[segment @ 0x570e49c3f680] Opening './videos/segments/part_023.mp4' for writing
+[segment @ 0x570e49c3f680] Opening './videos/segments/part_024.mp4' for writing
+[segment @ 0x570e49c3f680] Opening './videos/segments/part_025.mp4' for writing
+[segment @ 0x570e49c3f680] Opening './videos/segments/part_026.mp4' for writing
+[out#0/segment @ 0x570e49be0f40] video:55970kB audio:4082kB subtitle:0kB other streams:0kB global headers:0kB muxing overhead: unknown
+size=N/A time=00:04:21.20 bitrate=N/A speed= 198x    
+[22:01:40][dashboard] task_submitted: task_id=1000 cmd=6(ffmpeg_segment) arg=0 queue_depth=1
+[22:01:40][dashboard] task_submitted: task_id=1001 cmd=6(ffmpeg_segment) arg=1 queue_depth=2
+[22:01:40][dashboard] task_submitted: task_id=1002 cmd=6(ffmpeg_segment) arg=2 queue_depth=3
+[22:01:40][dashboard] task_submitted: task_id=1003 cmd=6(ffmpeg_segment) arg=3 queue_depth=4
+[22:01:40][dashboard] task_submitted: task_id=1004 cmd=6(ffmpeg_segment) arg=4 queue_depth=5
+[22:01:40][dashboard] task_submitted: task_id=1005 cmd=6(ffmpeg_segment) arg=5 queue_depth=5
+[22:01:40][dashboard] task_submitted: task_id=1006 cmd=6(ffmpeg_segment) arg=6 queue_depth=6
+[22:01:40][dashboard] task_submitted: task_id=1007 cmd=6(ffmpeg_segment) arg=7 queue_depth=7
+[22:01:40][dashboard] task_submitted: task_id=1008 cmd=6(ffmpeg_segment) arg=8 queue_depth=8
+[22:01:40][dashboard] task_submitted: task_id=1009 cmd=6(ffmpeg_segment) arg=9 queue_depth=9
+[22:01:40][dashboard] task_submitted: task_id=1010 cmd=6(ffmpeg_segment) arg=10 queue_depth=10
+[22:01:40][dashboard] task_submitted: task_id=1011 cmd=6(ffmpeg_segment) arg=11 queue_depth=11
+[22:01:40][dashboard] task_submitted: task_id=1012 cmd=6(ffmpeg_segment) arg=12 queue_depth=12
+[22:01:40][dashboard] task_submitted: task_id=1013 cmd=6(ffmpeg_segment) arg=13 queue_depth=13
+[22:01:40][dashboard] task_submitted: task_id=1014 cmd=6(ffmpeg_segment) arg=14 queue_depth=14
+[22:01:40][dashboard] task_submitted: task_id=1015 cmd=6(ffmpeg_segment) arg=15 queue_depth=15
+[22:01:40][dashboard] task_submitted: task_id=1016 cmd=6(ffmpeg_segment) arg=16 queue_depth=16
+[22:01:40][dashboard] task_submitted: task_id=1017 cmd=6(ffmpeg_segment) arg=17 queue_depth=17
+[22:01:40][dashboard] task_submitted: task_id=1018 cmd=6(ffmpeg_segment) arg=18 queue_depth=18
+[22:01:40][dashboard] task_submitted: task_id=1019 cmd=6(ffmpeg_segment) arg=19 queue_depth=19
+[22:01:40][dashboard] task_submitted: task_id=1020 cmd=6(ffmpeg_segment) arg=20 queue_depth=20
+[22:01:40][dashboard] task_submitted: task_id=1021 cmd=6(ffmpeg_segment) arg=21 queue_depth=21
+[22:01:40][dashboard] task_submitted: task_id=1022 cmd=6(ffmpeg_segment) arg=22 queue_depth=22
+[22:01:40][dashboard] task_submitted: task_id=1023 cmd=6(ffmpeg_segment) arg=23 queue_depth=23
+[22:01:40][dashboard] task_submitted: task_id=1024 cmd=6(ffmpeg_segment) arg=24 queue_depth=24
+[22:01:40][dashboard] task_submitted: task_id=1025 cmd=6(ffmpeg_segment) arg=25 queue_depth=25
+[22:01:40][dashboard] task_submitted: task_id=1026 cmd=6(ffmpeg_segment) arg=26 queue_depth=26
+[22:01:40][scheduler] dispatch: task_id=1000 cmd=6(ffmpeg_segment) arg=0 -> worker=1 worker_completed=0 worker_avg=0ms queue_depth=26
+[22:01:40][scheduler] dispatch: task_id=1001 cmd=6(ffmpeg_segment) arg=1 -> worker=2 worker_completed=0 worker_avg=0ms queue_depth=25
+[22:01:40][scheduler] dispatch: task_id=1002 cmd=6(ffmpeg_segment) arg=2 -> worker=3 worker_completed=0 worker_avg=0ms queue_depth=24
+[22:01:40][scheduler] dispatch: task_id=1003 cmd=6(ffmpeg_segment) arg=3 -> worker=4 worker_completed=0 worker_avg=0ms queue_depth=23
+[22:01:47][master] worker_finished: worker=3 task_id=1002 cmd=6(ffmpeg_segment) arg=2 result=1 runtime=7000ms completed=1 avg=7000ms status=idle
+[22:01:47][scheduler] dispatch: task_id=1013 cmd=6(ffmpeg_segment) arg=13 -> worker=3 worker_completed=1 worker_avg=7000ms queue_depth=22
+[22:01:47][master] worker_finished: worker=1 task_id=1000 cmd=6(ffmpeg_segment) arg=0 result=1 runtime=7000ms completed=1 avg=7000ms status=idle
+[22:01:47][master] worker_finished: worker=2 task_id=1001 cmd=6(ffmpeg_segment) arg=1 result=1 runtime=7000ms completed=1 avg=7000ms status=idle
+[22:01:47][scheduler] dispatch: task_id=1020 cmd=6(ffmpeg_segment) arg=20 -> worker=1 worker_completed=1 worker_avg=7000ms queue_depth=21
+[22:01:47][scheduler] dispatch: task_id=1021 cmd=6(ffmpeg_segment) arg=21 -> worker=2 worker_completed=1 worker_avg=7000ms queue_depth=20
+[22:01:47][master] worker_finished: worker=4 task_id=1003 cmd=6(ffmpeg_segment) arg=3 result=1 runtime=7000ms completed=1 avg=7000ms status=idle
+[22:01:47][scheduler] dispatch: task_id=1023 cmd=6(ffmpeg_segment) arg=23 -> worker=4 worker_completed=1 worker_avg=7000ms queue_depth=19
+[22:01:51][master] worker_finished: worker=1 task_id=1020 cmd=6(ffmpeg_segment) arg=20 result=1 runtime=4000ms completed=2 avg=5500ms status=idle
+[22:01:51][scheduler] dispatch: task_id=1008 cmd=6(ffmpeg_segment) arg=8 -> worker=1 worker_completed=2 worker_avg=5500ms queue_depth=18
+[22:01:52][master] worker_finished: worker=2 task_id=1021 cmd=6(ffmpeg_segment) arg=21 result=1 runtime=5000ms completed=2 avg=6000ms status=idle
+[22:01:52][scheduler] dispatch: task_id=1022 cmd=6(ffmpeg_segment) arg=22 -> worker=2 worker_completed=2 worker_avg=6000ms queue_depth=17
+[22:01:52][master] worker_finished: worker=3 task_id=1013 cmd=6(ffmpeg_segment) arg=13 result=1 runtime=5000ms completed=2 avg=6000ms status=idle
+[22:01:52][scheduler] dispatch: task_id=1026 cmd=6(ffmpeg_segment) arg=26 -> worker=3 worker_completed=2 worker_avg=6000ms queue_depth=16
+[22:01:52][master] worker_finished: worker=4 task_id=1023 cmd=6(ffmpeg_segment) arg=23 result=1 runtime=5000ms completed=2 avg=6000ms status=idle
+[22:01:52][scheduler] dispatch: task_id=1024 cmd=6(ffmpeg_segment) arg=24 -> worker=4 worker_completed=2 worker_avg=6000ms queue_depth=15
+[22:01:53][master] worker_finished: worker=3 task_id=1026 cmd=6(ffmpeg_segment) arg=26 result=1 runtime=1000ms completed=3 avg=4333ms status=idle
+[22:01:53][scheduler] dispatch: task_id=1015 cmd=6(ffmpeg_segment) arg=15 -> worker=3 worker_completed=3 worker_avg=4333ms queue_depth=14
+[22:01:54][master] worker_finished: worker=1 task_id=1008 cmd=6(ffmpeg_segment) arg=8 result=1 runtime=3000ms completed=3 avg=4666ms status=idle
+[22:01:54][scheduler] dispatch: task_id=1006 cmd=6(ffmpeg_segment) arg=6 -> worker=1 worker_completed=3 worker_avg=4666ms queue_depth=13
+[22:01:55][master] worker_finished: worker=2 task_id=1022 cmd=6(ffmpeg_segment) arg=22 result=1 runtime=3000ms completed=3 avg=5000ms status=idle
+[22:01:55][scheduler] dispatch: task_id=1014 cmd=6(ffmpeg_segment) arg=14 -> worker=2 worker_completed=3 worker_avg=5000ms queue_depth=12
+[22:01:56][master] worker_finished: worker=4 task_id=1024 cmd=6(ffmpeg_segment) arg=24 result=1 runtime=4000ms completed=3 avg=5333ms status=idle
+[22:01:56][scheduler] dispatch: task_id=1009 cmd=6(ffmpeg_segment) arg=9 -> worker=4 worker_completed=3 worker_avg=5333ms queue_depth=11
+[22:01:56][master] worker 4 disconnected
+[22:01:56][master] requeueing orphaned task 1009
+[22:01:58][master] worker_finished: worker=3 task_id=1015 cmd=6(ffmpeg_segment) arg=15 result=1 runtime=5000ms completed=4 avg=4500ms status=idle
+[22:01:58][scheduler] dispatch: task_id=1018 cmd=6(ffmpeg_segment) arg=18 -> worker=3 worker_completed=4 worker_avg=4500ms queue_depth=11
+[22:01:58][master] worker_finished: worker=1 task_id=1006 cmd=6(ffmpeg_segment) arg=6 result=1 runtime=4000ms completed=4 avg=4500ms status=idle
+[22:01:58][scheduler] dispatch: task_id=1009 cmd=6(ffmpeg_segment) arg=9 -> worker=1 worker_completed=4 worker_avg=4500ms queue_depth=10
+[22:01:58][master] worker_finished: worker=2 task_id=1014 cmd=6(ffmpeg_segment) arg=14 result=1 runtime=3000ms completed=4 avg=4500ms status=idle
+[22:01:58][scheduler] dispatch: task_id=1025 cmd=6(ffmpeg_segment) arg=25 -> worker=2 worker_completed=4 worker_avg=4500ms queue_depth=9
+[22:01:59][master] worker_finished: worker=3 task_id=1018 cmd=6(ffmpeg_segment) arg=18 result=1 runtime=1000ms completed=5 avg=3800ms status=idle
+[22:01:59][scheduler] dispatch: task_id=1010 cmd=6(ffmpeg_segment) arg=10 -> worker=3 worker_completed=5 worker_avg=3800ms queue_depth=8
+[22:01:59][master] worker_finished: worker=2 task_id=1025 cmd=6(ffmpeg_segment) arg=25 result=1 runtime=1000ms completed=5 avg=3800ms status=idle
+[22:01:59][scheduler] dispatch: task_id=1011 cmd=6(ffmpeg_segment) arg=11 -> worker=2 worker_completed=5 worker_avg=3800ms queue_depth=7
+[22:02:00][master] worker_finished: worker=1 task_id=1009 cmd=6(ffmpeg_segment) arg=9 result=1 runtime=2000ms completed=5 avg=4000ms status=idle
+[22:02:00][scheduler] dispatch: task_id=1004 cmd=6(ffmpeg_segment) arg=4 -> worker=1 worker_completed=5 worker_avg=4000ms queue_depth=6
+[22:02:01][master] worker_finished: worker=2 task_id=1011 cmd=6(ffmpeg_segment) arg=11 result=1 runtime=2000ms completed=6 avg=3500ms status=idle
+[22:02:01][scheduler] dispatch: task_id=1005 cmd=6(ffmpeg_segment) arg=5 -> worker=2 worker_completed=6 worker_avg=3500ms queue_depth=5
+[22:02:02][master] worker_finished: worker=3 task_id=1010 cmd=6(ffmpeg_segment) arg=10 result=1 runtime=3000ms completed=6 avg=3666ms status=idle
+[22:02:02][scheduler] dispatch: task_id=1012 cmd=6(ffmpeg_segment) arg=12 -> worker=3 worker_completed=6 worker_avg=3666ms queue_depth=4
+[22:02:02][master] worker_finished: worker=1 task_id=1004 cmd=6(ffmpeg_segment) arg=4 result=1 runtime=2000ms completed=6 avg=3666ms status=idle
+[22:02:02][scheduler] dispatch: task_id=1017 cmd=6(ffmpeg_segment) arg=17 -> worker=1 worker_completed=6 worker_avg=3666ms queue_depth=3
+[22:02:04][master] worker_finished: worker=2 task_id=1005 cmd=6(ffmpeg_segment) arg=5 result=1 runtime=3000ms completed=7 avg=3428ms status=idle
+[22:02:04][scheduler] dispatch: task_id=1016 cmd=6(ffmpeg_segment) arg=16 -> worker=2 worker_completed=7 worker_avg=3428ms queue_depth=2
+[22:02:04][master] worker_finished: worker=3 task_id=1012 cmd=6(ffmpeg_segment) arg=12 result=1 runtime=2000ms completed=7 avg=3428ms status=idle
+[22:02:04][scheduler] dispatch: task_id=1007 cmd=6(ffmpeg_segment) arg=7 -> worker=3 worker_completed=7 worker_avg=3428ms queue_depth=1
+[22:02:05][master] worker_finished: worker=1 task_id=1017 cmd=6(ffmpeg_segment) arg=17 result=1 runtime=3000ms completed=7 avg=3571ms status=idle
+[22:02:05][scheduler] dispatch: task_id=1019 cmd=6(ffmpeg_segment) arg=19 -> worker=1 worker_completed=7 worker_avg=3571ms queue_depth=0
+[22:02:07][master] worker_finished: worker=2 task_id=1016 cmd=6(ffmpeg_segment) arg=16 result=1 runtime=3000ms completed=8 avg=3375ms status=idle
+[22:02:07][master] worker_finished: worker=3 task_id=1007 cmd=6(ffmpeg_segment) arg=7 result=1 runtime=3000ms completed=8 avg=3375ms status=idle
+[22:02:07][master] worker_finished: worker=1 task_id=1019 cmd=6(ffmpeg_segment) arg=19 result=1 runtime=2000ms completed=8 avg=3375ms status=idle
+[22:02:07][master] job_complete: job=1 cmd=6(ffmpeg_segment) tasks=27 failed=0 sum_results=27 successful_segments=27
+ffmpeg version 6.1.1-3ubuntu5 Copyright (c) 2000-2023 the FFmpeg developers
+  built with gcc 13 (Ubuntu 13.2.0-23ubuntu3)
+  configuration: --prefix=/usr --extra-version=3ubuntu5 --toolchain=hardened --libdir=/usr/lib/x86_64-linux-gnu --incdir=/usr/include/x86_64-linux-gnu --arch=amd64 --enable-gpl --disable-stripping --disable-omx --enable-gnutls --enable-libaom --enable-libass --enable-libbs2b --enable-libcaca --enable-libcdio --enable-libcodec2 --enable-libdav1d --enable-libflite --enable-libfontconfig --enable-libfreetype --enable-libfribidi --enable-libglslang --enable-libgme --enable-libgsm --enable-libharfbuzz --enable-libmp3lame --enable-libmysofa --enable-libopenjpeg --enable-libopenmpt --enable-libopus --enable-librubberband --enable-libshine --enable-libsnappy --enable-libsoxr --enable-libspeex --enable-libtheora --enable-libtwolame --enable-libvidstab --enable-libvorbis --enable-libvpx --enable-libwebp --enable-libx265 --enable-libxml2 --enable-libxvid --enable-libzimg --enable-openal --enable-opencl --enable-opengl --disable-sndio --enable-libvpl --disable-libmfx --enable-libdc1394 --enable-libdrm --enable-libiec61883 --enable-chromaprint --enable-frei0r --enable-ladspa --enable-libbluray --enable-libjack --enable-libpulse --enable-librabbitmq --enable-librist --enable-libsrt --enable-libssh --enable-libsvtav1 --enable-libx264 --enable-libzmq --enable-libzvbi --enable-lv2 --enable-sdl2 --enable-libplacebo --enable-librav1e --enable-pocketsphinx --enable-librsvg --enable-libjxl --enable-shared
+  libavutil      58. 29.100 / 58. 29.100
+  libavcodec     60. 31.102 / 60. 31.102
+  libavformat    60. 16.100 / 60. 16.100
+  libavdevice    60.  3.100 / 60.  3.100
+  libavfilter     9. 12.100 /  9. 12.100
+  libswscale      7.  5.100 /  7.  5.100
+  libswresample   4. 12.100 /  4. 12.100
+  libpostproc    57.  3.100 / 57.  3.100
+[mov,mp4,m4a,3gp,3g2,mj2 @ 0x60660960f900] Auto-inserting h264_mp4toannexb bitstream filter
+Input #0, concat, from './videos/final/list.txt':
+  Duration: N/A, start: 0.000000, bitrate: 152 kb/s
+  Stream #0:0(und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 1280x720 [SAR 1:1 DAR 16:9], 24 kb/s, 10 fps, 10 tbr, 10240 tbn
+    Metadata:
+      handler_name    : VideoHandler
+      vendor_id       : [0][0][0][0]
+      encoder         : Lavc60.31.102 libx264
+  Stream #0:1(und): Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, mono, fltp, 128 kb/s
+    Metadata:
+      handler_name    : SoundHandler
+      vendor_id       : [0][0][0][0]
+Output #0, mp4, to './videos/final/Media1_modified.mp4':
+  Metadata:
+    encoder         : Lavf60.16.100
+  Stream #0:0(und): Video: h264 (High) (avc1 / 0x31637661), yuv420p(progressive), 1280x720 [SAR 1:1 DAR 16:9], q=2-31, 24 kb/s, 10 fps, 10 tbr, 10240 tbn
+    Metadata:
+      handler_name    : VideoHandler
+      vendor_id       : [0][0][0][0]
+      encoder         : Lavc60.31.102 libx264
+  Stream #0:1(und): Audio: aac (LC) (mp4a / 0x6134706D), 44100 Hz, mono, fltp, 128 kb/s
+    Metadata:
+      handler_name    : SoundHandler
+      vendor_id       : [0][0][0][0]
+Stream mapping:
+  Stream #0:0 -> #0:0 (copy)
+  Stream #0:1 -> #0:1 (copy)
+Press [q] to stop, [?] for help
+size=       0kB time=-00:00:00.20 bitrate=  -0.0kbits/s speed=N/A    [mov,mp4,m4a,3gp,3g2,mj2 @ 0x60660960f900] Auto-inserting h264_mp4toannexb bitstream filter
+    Last message repeated 20 times
+size=    4352kB time=00:03:30.24 bitrate= 169.6kbits/s speed= 420x    [mov,mp4,m4a,3gp,3g2,mj2 @ 0x60660960f900] Auto-inserting h264_mp4toannexb bitstream filter
+    Last message repeated 4 times
+[out#0/mp4 @ 0x606609715780] video:1573kB audio:4082kB subtitle:0kB other streams:0kB global headers:0kB muxing overhead: 2.456767%
+size=    5794kB time=00:04:21.31 bitrate= 181.6kbits/s speed= 423x    

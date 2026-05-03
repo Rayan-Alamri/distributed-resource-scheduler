@@ -217,6 +217,9 @@ void scheduler_start(Scheduler *s) {
 }
 
 void scheduler_stop(Scheduler *s) {
+    if (!s->running)
+        return;
+
     s->running = 0;
     pthread_join(s->thread, NULL);
 }

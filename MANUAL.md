@@ -179,14 +179,31 @@ Open **three or four terminals** (Terminal 3 is optional but recommended).
 
 ```bash
 ./bin/master
-# Listens on port 9090 by default
+# Listens on port 9090 by default.
+# Interactive terminals open the ncurses dashboard automatically.
 
 # Custom port:
 MASTER_PORT=9091 ./bin/master
 
 # Auto-seed 6 tasks after 3 s:
 DEMO_TASKS=6 ./bin/master
+
+# Disable the dashboard and keep plain terminal logs:
+MASTER_DASHBOARD=0 ./bin/master
+
+# Force the dashboard when a TTY is available:
+MASTER_DASHBOARD=1 ./bin/master
 ```
+
+Inside the dashboard, press `n` to create a task batch. Select the workload,
+task count, argument, step, range end, and start task ID, then press Enter to
+queue the tasks. Press Esc to cancel the form.
+
+Press `v` to process a whole video. The dashboard lists videos from
+`VIDEO_DIR/input` (`./videos/input` for native repo runs when it exists, or
+`/videos/input` in Docker), splits the selected video into segments, queues one
+`ffmpeg_segment` task per segment, and merges the processed segments into
+`VIDEO_DIR/final/<name>_modified.mp4` when the job finishes successfully.
 
 ### Terminal 2 — Worker 1
 

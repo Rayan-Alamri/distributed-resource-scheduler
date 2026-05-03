@@ -1,10 +1,9 @@
 #ifndef DASHBOARD_H
 #define DASHBOARD_H
 
-/* Minimal stubs — full ncurses implementation is Mohammed Yar's scope.
- * These symbols let the master binary compile without the UI being wired up. */
+#include "../master/server.h"
 
-void dashboard_init(void);
+int  dashboard_init(MasterState *master);
 void dashboard_run(void);
 void dashboard_stop(void);
 

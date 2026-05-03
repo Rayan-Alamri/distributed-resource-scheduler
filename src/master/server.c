@@ -1,15 +1,29 @@
 #include "server.h"
 #include "../shared/protocol.h"
+#include "../ui/dashboard.h"
+#include <dirent.h>
+#include <fnmatch.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <unistd.h>
 #include <errno.h>
 #include <time.h>
 #include <pthread.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+
+#define VIDEO_DIR_DEFAULT "/videos"
+#define VIDEO_SEGMENT_SECONDS_DEFAULT 10u
+
+typedef struct {
+    unsigned id;
+    char path[1024];
+} SegmentFile;
 
 static const char *now(void) {
     static char buf[9];
@@ -51,6 +65,153 @@ static int is_ffmpeg_result_success(uint32_t command_code, uint32_t result) {
         return 1;
 
     return result == FFMPEG_RESULT_SUCCESS;
+}
+
+const char *master_video_dir(void) {
+    const char *dir = getenv("VIDEO_DIR");
+
+    if (dir && *dir)
+        return dir;
+    if (access("./videos", R_OK | X_OK) == 0)
+        return "./videos";
+
+    return VIDEO_DIR_DEFAULT;
+}
+
+static int valid_video_name(const char *name) {
+    return name && *name &&
+        strchr(name, '/') == NULL &&
+        strchr(name, '\\') == NULL &&
+        strcmp(name, ".") != 0 &&
+        strcmp(name, "..") != 0;
+}
+
+static int ensure_dir(const char *path) {
+    if (mkdir(path, 0755) == 0 || errno == EEXIST)
+        return 0;
+    return -1;
+}
+
+static int remove_matching_files(const char *dir, const char *pattern) {
+    DIR *dp = opendir(dir);
+    struct dirent *entry;
+
+    if (!dp)
+        return 0;
+
+    while ((entry = readdir(dp)) != NULL) {
+        char path[512];
+
+        if (fnmatch(pattern, entry->d_name, 0) != 0)
+            continue;
+
+        snprintf(path, sizeof(path), "%s/%s", dir, entry->d_name);
+        unlink(path);
+    }
+
+    closedir(dp);
+    return 0;
+}
+
+static int run_process(char *const argv[]) {
+    pid_t pid = fork();
+    int status = 0;
+
+    if (pid < 0)
+        return -1;
+
+    if (pid == 0) {
+        execvp(argv[0], argv);
+        _exit(127);
+    }
+
+    while (waitpid(pid, &status, 0) < 0) {
+        if (errno == EINTR)
+            continue;
+        return -1;
+    }
+
+    if (!WIFEXITED(status))
+        return -1;
+
+    return WEXITSTATUS(status);
+}
+
+static int parse_part_id(const char *name, unsigned *id_out) {
+    unsigned id;
+    char extra;
+
+    if (sscanf(name, "part_%u.mp4%c", &id, &extra) != 1)
+        return -1;
+
+    *id_out = id;
+    return 0;
+}
+
+static int count_segment_files(const char *dir) {
+    DIR *dp = opendir(dir);
+    struct dirent *entry;
+    int count = 0;
+
+    if (!dp)
+        return 0;
+
+    while ((entry = readdir(dp)) != NULL) {
+        unsigned id;
+
+        if (parse_part_id(entry->d_name, &id) == 0)
+            count++;
+    }
+
+    closedir(dp);
+    return count;
+}
+
+static int compare_segments(const void *left, const void *right) {
+    const SegmentFile *a = (const SegmentFile *)left;
+    const SegmentFile *b = (const SegmentFile *)right;
+
+    if (a->id < b->id)
+        return -1;
+    if (a->id > b->id)
+        return 1;
+    return 0;
+}
+
+static int collect_processed_segments(const char *dir,
+                                      SegmentFile *segments,
+                                      int max_segments) {
+    DIR *dp = opendir(dir);
+    struct dirent *entry;
+    int count = 0;
+
+    if (!dp)
+        return 0;
+
+    while ((entry = readdir(dp)) != NULL && count < max_segments) {
+        unsigned id;
+
+        if (parse_part_id(entry->d_name, &id) != 0)
+            continue;
+
+        segments[count].id = id;
+        snprintf(segments[count].path, sizeof(segments[count].path),
+                 "%s/%s", dir, entry->d_name);
+        count++;
+    }
+
+    closedir(dp);
+    qsort(segments, (size_t)count, sizeof(segments[0]), compare_segments);
+    return count;
+}
+
+static void input_stem(const char *input_name, char *stem, size_t stem_len) {
+    const char *dot;
+
+    snprintf(stem, stem_len, "%s", input_name);
+    dot = strrchr(stem, '.');
+    if (dot && dot != stem)
+        stem[dot - stem] = '\0';
 }
 
 static void job_init(JobSummary *job) {
@@ -131,6 +292,235 @@ static void job_record_result(JobSummary *job, const NetworkPayload *task, uint3
 
 /* ── Per-worker thread ───────────────────────────────────────────────────── */
 
+/* Dashboard submission API. */
+int master_submit_tasks(MasterState *ms,
+                        uint32_t command_code,
+                        uint32_t count,
+                        uint32_t argument,
+                        uint32_t step,
+                        uint32_t range_end,
+                        uint32_t start_id) {
+    uint32_t submitted = 0;
+
+    if (!ms || command_code < CMD_PRIME || command_code > CMD_FFMPEG_SCRIPT ||
+        count == 0 || count > MAX_JOB_TASKS)
+        return -1;
+
+    job_start(&ms->job, command_code);
+
+    for (uint32_t i = 0; i < count; i++) {
+        NetworkPayload task;
+
+        memset(&task, 0, sizeof(task));
+        task.type = MSG_TASK;
+        task.task_id = start_id + i;
+        task.command_code = command_code;
+        task.argument = argument + i * step;
+
+        if (command_code == CMD_PRIME_RANGE) {
+            task.result = step > 0
+                ? task.argument + step - 1
+                : range_end;
+        }
+
+        if (queue_enqueue(&ms->queue, &task) == 0) {
+            submitted++;
+            job_add_task(&ms->job, &task);
+            printf("[%s][dashboard] task_submitted: ", now());
+            print_task_fields(&task);
+            printf(" queue_depth=%d\n", queue_size(&ms->queue));
+        } else {
+            fprintf(stderr, "[%s][dashboard] queue failed for task_id=%u\n",
+                    now(), task.task_id);
+        }
+    }
+
+    if (submitted == 0) {
+        pthread_mutex_lock(&ms->job.lock);
+        ms->job.active = 0;
+        pthread_mutex_unlock(&ms->job.lock);
+    }
+
+    return (int)submitted;
+}
+
+int master_process_video(MasterState *ms,
+                         const char *input_name,
+                         uint32_t segment_seconds,
+                         uint32_t start_id,
+                         uint32_t *segment_count_out,
+                         char *message,
+                         size_t message_len) {
+    const char *vdir = master_video_dir();
+    char input[512];
+    char segments_dir[512];
+    char processed_dir[512];
+    char final_dir[512];
+    char output_pattern[1024];
+    char segment_time[16];
+    char last_input_path[512];
+    FILE *last_input;
+    int segment_count;
+    int submitted;
+
+    if (segment_count_out)
+        *segment_count_out = 0;
+
+    if (!ms || !valid_video_name(input_name)) {
+        snprintf(message, message_len, "Invalid video name.");
+        return -1;
+    }
+
+    if (segment_seconds == 0)
+        segment_seconds = VIDEO_SEGMENT_SECONDS_DEFAULT;
+
+    snprintf(input, sizeof(input), "%s/input/%s", vdir, input_name);
+    snprintf(segments_dir, sizeof(segments_dir), "%s/segments", vdir);
+    snprintf(processed_dir, sizeof(processed_dir), "%s/processed", vdir);
+    snprintf(final_dir, sizeof(final_dir), "%s/final", vdir);
+    snprintf(output_pattern, sizeof(output_pattern), "%s/part_%%03d.mp4", segments_dir);
+
+    if (access(input, R_OK) != 0) {
+        snprintf(message, message_len, "Video not found: %s", input_name);
+        return -1;
+    }
+
+    if (ensure_dir(segments_dir) != 0 ||
+        ensure_dir(processed_dir) != 0 ||
+        ensure_dir(final_dir) != 0) {
+        snprintf(message, message_len, "Could not create video directories.");
+        return -1;
+    }
+
+    remove_matching_files(segments_dir, "part_*.mp4");
+    remove_matching_files(processed_dir, "part_*.mp4");
+    remove_matching_files(processed_dir, ".part_*.tmp.*.mp4");
+
+    snprintf(segment_time, sizeof(segment_time), "%u", segment_seconds);
+    char *argv[] = {
+        "ffmpeg", "-y",
+        "-i", input,
+        "-c", "copy",
+        "-map", "0",
+        "-segment_time", segment_time,
+        "-f", "segment",
+        output_pattern,
+        NULL
+    };
+
+    if (run_process(argv) != 0) {
+        snprintf(message, message_len, "ffmpeg split failed for %s.", input_name);
+        return -1;
+    }
+
+    segment_count = count_segment_files(segments_dir);
+    if (segment_count <= 0) {
+        snprintf(message, message_len, "No segments were created.");
+        return -1;
+    }
+    if (segment_count > MAX_JOB_TASKS) {
+        snprintf(message, message_len, "Too many segments: %d.", segment_count);
+        return -1;
+    }
+
+    snprintf(last_input_path, sizeof(last_input_path), "%s/.last_input_name", vdir);
+    last_input = fopen(last_input_path, "w");
+    if (last_input) {
+        fprintf(last_input, "%s\n", input_name);
+        fclose(last_input);
+    }
+
+    submitted = master_submit_tasks(ms, CMD_FFMPEG_SEGMENT,
+                                    (uint32_t)segment_count,
+                                    0, 1, 0, start_id);
+    if (submitted != segment_count) {
+        snprintf(message, message_len, "Queued %d of %d segments.",
+                 submitted, segment_count);
+        return -1;
+    }
+
+    if (segment_count_out)
+        *segment_count_out = (uint32_t)segment_count;
+    snprintf(message, message_len, "Queued %d segment task(s) for %s.",
+             segment_count, input_name);
+    return 0;
+}
+
+int master_merge_video(const char *input_name,
+                       char *output_path,
+                       size_t output_path_len,
+                       char *message,
+                       size_t message_len) {
+    const char *vdir = master_video_dir();
+    SegmentFile segments[MAX_JOB_TASKS];
+    char processed_dir[512];
+    char final_dir[512];
+    char list_path[1024];
+    char output[1024];
+    char stem[256];
+    FILE *list;
+    int count;
+
+    if (!valid_video_name(input_name)) {
+        snprintf(message, message_len, "Invalid video name.");
+        return -1;
+    }
+
+    snprintf(processed_dir, sizeof(processed_dir), "%s/processed", vdir);
+    snprintf(final_dir, sizeof(final_dir), "%s/final", vdir);
+    snprintf(list_path, sizeof(list_path), "%s/list.txt", final_dir);
+    input_stem(input_name, stem, sizeof(stem));
+    snprintf(output, sizeof(output), "%s/%s_modified.mp4", final_dir, stem);
+
+    if (ensure_dir(final_dir) != 0) {
+        snprintf(message, message_len, "Could not create final directory.");
+        return -1;
+    }
+
+    count = collect_processed_segments(processed_dir, segments, MAX_JOB_TASKS);
+    if (count <= 0) {
+        snprintf(message, message_len, "No processed segments to merge.");
+        return -1;
+    }
+
+    list = fopen(list_path, "w");
+    if (!list) {
+        snprintf(message, message_len, "Could not write merge list.");
+        return -1;
+    }
+
+    for (int i = 0; i < count; i++) {
+        char absolute_path[1024];
+        const char *path = realpath(segments[i].path, absolute_path)
+            ? absolute_path
+            : segments[i].path;
+
+        fprintf(list, "file '%s'\n", path);
+    }
+    fclose(list);
+
+    char *argv[] = {
+        "ffmpeg", "-y",
+        "-f", "concat",
+        "-safe", "0",
+        "-i", list_path,
+        "-c", "copy",
+        output,
+        NULL
+    };
+
+    if (run_process(argv) != 0) {
+        snprintf(message, message_len, "ffmpeg merge failed.");
+        return -1;
+    }
+
+    if (output_path && output_path_len > 0)
+        snprintf(output_path, output_path_len, "%s", output);
+    snprintf(message, message_len, "Merged output: %s", output);
+    return 0;
+}
+
+/* Per-worker thread. */
 /**
  * WorkerArg struct holds arguments for the worker thread.
  * - sock_fd: Socket file descriptor for communication with the worker.
@@ -438,10 +828,49 @@ static void *seed_demo_tasks(void *arg) {
 
 /* ── Entry point ─────────────────────────────────────────────────────────── */
 
+static void *server_thread_main(void *arg) {
+    server_run((MasterState *)arg);
+    return NULL;
+}
+
+static int env_is_false(const char *value) {
+    return value && (
+        strcmp(value, "0") == 0 ||
+        strcasecmp(value, "false") == 0 ||
+        strcasecmp(value, "off") == 0 ||
+        strcasecmp(value, "no") == 0);
+}
+
+static int dashboard_requested(void) {
+    const char *env = getenv("MASTER_DASHBOARD");
+
+    if (env && *env != '\0')
+        return !env_is_false(env);
+
+    return isatty(STDIN_FILENO) && isatty(STDOUT_FILENO);
+}
+
+static void redirect_logs_for_dashboard(void) {
+    const char *path = getenv("MASTER_LOG_FILE");
+
+    if (!path || *path == '\0')
+        path = "logs/master.log";
+
+    mkdir("logs", 0755);
+
+    if (freopen(path, "a", stdout))
+        setvbuf(stdout, NULL, _IONBF, 0);
+    if (freopen(path, "a", stderr))
+        setvbuf(stderr, NULL, _IONBF, 0);
+
+    printf("[%s][master] dashboard mode enabled; logging to %s\n", now(), path);
+}
+
 int main(void) {
     MasterState ms;
     int port = MASTER_PORT;
     const char *port_env = getenv("MASTER_PORT");
+    int use_dashboard;
 
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);
@@ -453,6 +882,38 @@ int main(void) {
     }
     if (server_init(&ms, port) != 0)
         return 1;
+
+    use_dashboard = dashboard_requested();
+    if (use_dashboard && dashboard_init(&ms) == 0) {
+        pthread_t server_tid;
+
+        redirect_logs_for_dashboard();
+        if (pthread_create(&server_tid, NULL, server_thread_main, &ms) != 0) {
+            fprintf(stderr, "[%s][master] failed to start server thread\n", now());
+            dashboard_stop();
+            server_shutdown(&ms);
+            return 1;
+        }
+        pthread_detach(server_tid);
+
+        /* If DEMO_TASKS is set, spawn a thread that seeds sample tasks */
+        if (getenv("DEMO_TASKS")) {
+            pthread_t       demo_tid;
+            pthread_attr_t  demo_attr;
+            pthread_attr_init(&demo_attr);
+            pthread_attr_setdetachstate(&demo_attr, PTHREAD_CREATE_DETACHED);
+            pthread_create(&demo_tid, &demo_attr, seed_demo_tasks, &ms);
+            pthread_attr_destroy(&demo_attr);
+        }
+
+        dashboard_run();
+        dashboard_stop();
+        server_shutdown(&ms);
+        return 0;
+    }
+
+    if (use_dashboard)
+        fprintf(stderr, "[%s][master] dashboard unavailable; using log mode\n", now());
 
     /* If DEMO_TASKS is set, spawn a thread that seeds sample tasks */
     if (getenv("DEMO_TASKS")) {

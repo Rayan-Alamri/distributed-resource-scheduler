@@ -1,6 +1,8 @@
 #ifndef SERVER_H
 #define SERVER_H
 
+#include <stddef.h>
+
 #include "scheduler.h"
 #include "queue_mgr.h"
 
@@ -37,5 +39,30 @@ void server_run(MasterState *ms);
 
 /* Stop scheduler thread and close listen socket. */
 void server_shutdown(MasterState *ms);
+
+/* Submit a batch directly from in-process UI code. Returns queued task count. */
+int master_submit_tasks(MasterState *ms,
+                        uint32_t command_code,
+                        uint32_t count,
+                        uint32_t argument,
+                        uint32_t step,
+                        uint32_t range_end,
+                        uint32_t start_id);
+
+const char *master_video_dir(void);
+
+int master_process_video(MasterState *ms,
+                         const char *input_name,
+                         uint32_t segment_seconds,
+                         uint32_t start_id,
+                         uint32_t *segment_count_out,
+                         char *message,
+                         size_t message_len);
+
+int master_merge_video(const char *input_name,
+                       char *output_path,
+                       size_t output_path_len,
+                       char *message,
+                       size_t message_len);
 
 #endif /* SERVER_H */
