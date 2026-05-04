@@ -1,4 +1,13 @@
 #include "queue_mgr.h"
+
+/*
+ * Thread-safe FIFO task queue.
+ *
+ * Submit clients and dashboard actions enqueue tasks, while the scheduler
+ * dequeues them. The queue owns each linked-list node, but the NetworkPayload
+ * itself is copied in and out so callers never share node memory.
+ */
+
 #include <stdlib.h>
 #include <string.h>
 

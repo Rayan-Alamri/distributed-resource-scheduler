@@ -1,4 +1,13 @@
 #include "protocol.h"
+
+/*
+ * Socket framing helpers shared by master, worker, and submit client.
+ *
+ * The project sends fixed-size NetworkPayload structs over TCP. TCP may split
+ * or coalesce writes, so callers use recv_full()/send_full() instead of raw
+ * recv()/send() whenever they exchange a protocol frame.
+ */
+
 #include <errno.h>
 #include <sys/socket.h>
 #include <arpa/inet.h>

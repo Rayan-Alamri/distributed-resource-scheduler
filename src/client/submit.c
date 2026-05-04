@@ -11,6 +11,14 @@
 #include "../shared/protocol.h"
 #include "../shared/models.h"
 
+/*
+ * Command-line submit client.
+ *
+ * Normal users can submit tasks from the dashboard, but this tool is useful
+ * for scripted tests, Docker one-shot clients, and reproducible workload runs.
+ * It connects as MSG_SUBMIT, sends a batch of MSG_TASK frames, then exits.
+ */
+
 #define DEFAULT_HOST     "master"
 #define DEFAULT_PORT     9090
 #define DEFAULT_COUNT    1
@@ -96,6 +104,10 @@ int main(int argc, char *argv[]) {
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);
 
+    /*
+     * Environment variables make Docker and Makefile demos convenient, while
+     * command-line flags below remain the final override for manual runs.
+     */
     if (getenv("SUBMIT_HOST"))      host      = getenv("SUBMIT_HOST");
     if (getenv("SUBMIT_PORT"))      port      = atoi(getenv("SUBMIT_PORT"));
     if (getenv("SUBMIT_COUNT"))     count     = atoi(getenv("SUBMIT_COUNT"));
@@ -160,6 +172,7 @@ int main(int argc, char *argv[]) {
     NetworkPayload reg;
     memset(&reg, 0, sizeof(reg));
     reg.type = MSG_SUBMIT;
+    /* The initial frame tells the master this socket is not a worker. */
     payload_to_net(&reg);
     if (send_full(fd, &reg, sizeof(reg)) != 0) {
         fprintf(stderr, "submit: handshake send failed\n");

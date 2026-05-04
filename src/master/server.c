@@ -1,6 +1,17 @@
 #include "server.h"
 #include "../shared/protocol.h"
 #include "../ui/dashboard.h"
+
+/*
+ * Master process entry point and orchestration layer.
+ *
+ * This file owns the listening socket, worker/submit client threads, job
+ * summary bookkeeping, dashboard-facing submission API, and video pipeline
+ * helpers. Lower-level scheduling and queue operations are delegated to
+ * scheduler.c and queue_mgr.c so this file can focus on network lifecycle and
+ * job-level coordination.
+ */
+
 #include <dirent.h>
 #include <fnmatch.h>
 #include <stdio.h>
@@ -115,6 +126,10 @@ const char *master_video_dir(void) {
 }
 
 static int valid_video_name(const char *name) {
+    /*
+     * The dashboard accepts a file name from videos/input. Reject path
+     * separators so UI input cannot escape the configured video directory.
+     */
     return name && *name &&
         strchr(name, '/') == NULL &&
         strchr(name, '\\') == NULL &&
@@ -141,6 +156,7 @@ static int remove_matching_files(const char *dir, const char *pattern) {
         if (fnmatch(pattern, entry->d_name, 0) != 0)
             continue;
 
+        /* Best-effort cleanup: missing files are harmless during reruns. */
         snprintf(path, sizeof(path), "%s/%s", dir, entry->d_name);
         unlink(path);
     }

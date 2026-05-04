@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include "../shared/models.h"
 
+/* Negative statuses describe parent-side setup/wait failures, not task results. */
 typedef enum {
     EXECUTOR_OK = 0,
     EXECUTOR_ERR_PIPE = -1,
@@ -12,6 +13,7 @@ typedef enum {
     EXECUTOR_ERR_CHILD_STATUS = -4
 } ExecutorStatus;
 
+/* Runs one task in an isolated child process and writes the uint32 result. */
 int executor_run_task(const NetworkPayload *task, uint32_t *result_out);
 
 #endif /* WORKER_EXECUTOR_H */

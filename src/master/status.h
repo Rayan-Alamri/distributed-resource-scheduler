@@ -7,6 +7,7 @@
 
 #include "server.h"
 
+/* Immutable copies used by the dashboard and JSON API after locks are released. */
 typedef struct {
     uint32_t       worker_id;
     WorkerStatus   status;

@@ -6,6 +6,12 @@
 #include "scheduler.h"
 #include "queue_mgr.h"
 
+/*
+ * MasterState is the shared root object for the master process. Each subsystem
+ * owns its own lock internally, so callers should use the public APIs below
+ * rather than reaching into nested queue/registry/job fields directly.
+ */
+
 #define MASTER_PORT 9090
 #define BACKLOG     10
 #define MAX_JOB_TASKS 1000

@@ -2,6 +2,15 @@
 #include "executor.h"
 #include "../shared/protocol.h"
 
+/*
+ * Worker process network client.
+ *
+ * A worker registers with the master, sends periodic heartbeat frames, accepts
+ * task frames, runs each task through executor.c, and sends the result back.
+ * Separate locks keep worker ID updates, socket writes, and active-task
+ * shutdown accounting independent.
+ */
+
 #include <arpa/inet.h>
 #include <errno.h>
 #include <netdb.h>
@@ -169,6 +178,7 @@ static int send_result(WorkerRuntime *rt, const NetworkPayload *task, uint32_t r
 
 static void runtime_task_started(WorkerRuntime *rt) {
     pthread_mutex_lock(&rt->task_lock);
+    /* Track outstanding detached task threads so shutdown can wait cleanly. */
     rt->active_tasks++;
     pthread_mutex_unlock(&rt->task_lock);
 }
@@ -176,8 +186,10 @@ static void runtime_task_started(WorkerRuntime *rt) {
 static void runtime_task_finished(WorkerRuntime *rt) {
     pthread_mutex_lock(&rt->task_lock);
     rt->active_tasks--;
-    if (rt->active_tasks == 0)
+    if (rt->active_tasks == 0) {
+        /* Wake the main thread if it is waiting for in-flight tasks to drain. */
         pthread_cond_signal(&rt->tasks_done);
+    }
     pthread_mutex_unlock(&rt->task_lock);
 }
 

@@ -1,0 +1,6 @@
+# Heavy local video inputs and generated outputs should stay out of Git.
+# Keep the directories themselves with .gitkeep files.
+/videos/input/*
+!/videos/input/.gitkeep
+/videos/final/*
+!/videos/final/.gitkeep

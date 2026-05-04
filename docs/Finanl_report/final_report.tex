@@ -3,7 +3,6 @@
 \usepackage[T1]{fontenc}
 \usepackage[margin=1in]{geometry}
 \usepackage{graphicx}
-\usepackage{hyperref}
 \usepackage{listings}
 \usepackage{xcolor}
 \usepackage{booktabs}
@@ -13,6 +12,7 @@
 \usepackage{float}
 \usepackage{tikz}
 \usetikzlibrary{shapes.geometric, arrows.meta, positioning, fit, calc}
+\usepackage{hyperref}
 
 \graphicspath{{TestsScreenshots/}}
 
@@ -48,21 +48,6 @@
     numbers=none
 }
 
-\newcommand{\placeholderfigure}[2]{
-\begin{figure}[H]
-\centering
-\fbox{
-\begin{minipage}[c][4.2cm][c]{0.86\textwidth}
-\centering
-\textbf{Screenshot Placeholder}\\[0.3cm]
-#1\\[0.2cm]
-\small #2
-\end{minipage}
-}
-\caption{Placeholder: #1}
-\end{figure}
-}
-
 \pagestyle{fancy}
 \fancyhf{}
 \setlength{\headheight}{14.5pt}
@@ -96,16 +81,13 @@
 \toprule
 Student Name & Student ID & Section & Main Contribution \\
 \midrule
-Rayan Alamri & TODO: ID & TODO: Section & Master node, scheduler, queue, worker registry \\
-Mohammed Alsuhaibani & TODO: ID & TODO: Section & Worker client, executor, FFmpeg workloads \\
-Ali Almuzain & TODO: ID & TODO: Section & Protocol, serialization, communication layer \\
-Mohammed Yar & TODO: ID & TODO: Section & ncurses dashboard, UI integration \\
+Rayan Alamri & 202247900 & 51 & Master node, scheduler, queue, worker registry \\
+Mohammed Alsuhaibani & 202245800 & 51 & Worker client, executor, FFmpeg workloads \\
+Ali Almuzain & 202261580 & 51 & Protocol, serialization, communication layer \\
+Mohammed Yar & 202173410 & 51 & ncurses dashboard, UI integration \\
 \bottomrule
 \end{tabular}
 \end{center}
-
-\vspace{0.3cm}
-\noindent\textbf{Note:} Student ID and section values were not present in the repository metadata. They are marked as TODO so they can be filled before PDF submission.
 
 \newpage
 \tableofcontents
@@ -270,6 +252,49 @@ Scripts and Docker & \texttt{Makefile}, \texttt{Dockerfile}, \texttt{docker-comp
 \end{tabular}
 \end{center}
 
+\subsection{Project Structure}
+
+The repository is organized by runtime role. The \texttt{src/} directory contains the C implementation, while scripts, Docker files, tests, documentation, and video folders support building, simulation, validation, and FFmpeg workloads.
+
+\begin{lstlisting}[style=shellstyle]
+distributed-resource-scheduler/
+  README.md                  user-facing overview and run instructions
+  MANUAL.md                  extended run and testing manual
+  Makefile                   native build, tests, demos, video helpers
+  Dockerfile                 container image for master, worker, submit
+  docker-compose.yml         compose-based local cluster simulation
+  src/
+    master/
+      server.c/.h            TCP accept loop, worker threads, job API
+      scheduler.c/.h         worker registry, assignment, heartbeat timeout
+      queue_mgr.c/.h         thread-safe FIFO queue and requeue logic
+      status.c/.h            dashboard/JSON snapshots of master state
+    worker/
+      client.c/.h            worker registration, heartbeats, result sending
+      executor.c/.h          fork-isolated workload execution
+    client/
+      submit.c               command-line task submitter
+    shared/
+      models.h               message types, worker states, command codes
+      protocol.c/.h          reliable socket send/receive and byte order
+    ui/
+      dashboard.c/.h         ncurses dashboard and built-in submission forms
+  scripts/
+    split_video.sh           split input videos into segment tasks
+    submit_ffmpeg.sh         submit segment tasks from the shell
+    merge_video.sh           merge processed video segments
+  tests/
+    test_scheduler.c         queue, registry, scheduler, protocol tests
+    test_worker_executor.c   worker executor and workload tests
+  docs/
+    Finanl_report/           LaTeX report and report screenshots
+  videos/
+    input/                   input videos selected by the dashboard
+    segments/                generated input segments
+    processed/               worker-produced processed segments
+    final/                   merged output videos
+\end{lstlisting}
+
 \section{Implementation Details}
 
 \subsection{Network Protocol}
@@ -379,7 +404,35 @@ Fault tolerance & Verifies task requeue when a worker disconnects or times out. 
 \end{tabular}
 \end{center}
 
-\subsection{Output Screenshots}
+\subsection{User Interface Screenshots}
+
+The dashboard user interface is divided into four main live areas. The \textbf{Overview} panel summarizes queue length, worker counts, current job state, task completion, failures, and the progress bar. The \textbf{Workers} panel lists each worker ID, state, current task, command, argument, completed-task count, average runtime, current run time, and heartbeat age. The \textbf{Job} panel shows the active or most recent job, including command type, expected tasks, elapsed time, result sum, and argument sum. The \textbf{Activity} panel records recent events such as completed jobs, output video paths, offline workers, and requeued tasks.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{UI.jpg}
+\caption{Main dashboard view showing the Overview, Workers, Job, and Activity panels after an FFmpeg segment job completed.}
+\end{figure}
+
+The task submission dialog provides dashboard-side job creation without using the command-line submit client. It exposes the command code, task count, first argument, argument step, range end, and starting task ID. The summary area previews the generated batch and ID range before submission, while the footer shows the available keyboard actions.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{UI_submitTasks.png}
+\caption{Submit Tasks dialog for creating a compute batch directly from the ncurses dashboard.}
+\end{figure}
+
+The video processing dialog is specialized for FFmpeg workflows. It lets the user choose an input video, set the segment duration, and select the starting task ID. The dashboard then splits the video, queues one \texttt{ffmpeg\_segment} task per segment, tracks progress through the job panel, and merges the processed segments after the job completes.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{UI_VideoProcessing.png}
+\caption{Process Video dialog used to select an input video and configure distributed segment processing.}
+\end{figure}
+
+\subsection{Testing Screenshots}
+
+The following screenshots document the testing evidence for fault tolerance, performance comparison, and unit-test execution.
 
 \begin{figure}[H]
 \centering
@@ -399,9 +452,11 @@ Fault tolerance & Verifies task requeue when a worker disconnects or times out. 
 \caption{FFmpeg performance run using three active workers. The elapsed time is lower due to parallel segment processing.}
 \end{figure}
 
-\placeholderfigure{Unit test output}{Suggested screenshot: run \texttt{make test} and capture all PASS lines.}
-
-\placeholderfigure{Docker fixed-core simulation}{Suggested screenshot: master dashboard with three workers launched using \texttt{docker run --rm -it --cpuset-cpus}.}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\textwidth]{UnitTestpng.png}
+\caption{Unit test output from \texttt{make test}, showing scheduler, queue, registry, protocol, and worker executor tests passing.}
+\end{figure}
 
 \subsection{Performance}
 
@@ -491,12 +546,25 @@ The final code is organized under the \texttt{src/} directory and built through 
 
 \subsection{Native Run Commands}
 
+The native run uses separate terminals for the long-running processes. First, build the binaries from the project root:
+
 \begin{lstlisting}[style=shellstyle]
 make
-./bin/master
-./bin/worker 127.0.0.1 9090
-./bin/submit -h 127.0.0.1 -p 9090 -c 8 -n 10 -a 0 -s 100 -e 1000
 \end{lstlisting}
+
+Then start the master in one terminal:
+
+\begin{lstlisting}[style=shellstyle]
+./bin/master
+\end{lstlisting}
+
+Start each worker in a separate terminal:
+
+\begin{lstlisting}[style=shellstyle]
+./bin/worker 127.0.0.1 9090
+\end{lstlisting}
+
+Additional workers are launched by repeating the worker command in more terminals. For normal users, task submission is handled through the ncurses dashboard: press \texttt{n} to submit a task batch, or press \texttt{v} to select and process a video.
 
 \subsection{Docker Fixed-Core Simulation}
 
@@ -526,6 +594,10 @@ docker run --rm -it --name drs-worker-1 \
   -v "$PWD/logs:/logs" \
   drs worker drs-master 9090
 \end{lstlisting}
+
+Worker container names cannot be reused while containers are running. If more workers are started, the number in \texttt{--name drs-worker-1} must be changed for each new worker, such as \texttt{drs-worker-2}, \texttt{drs-worker-3}, and so on. If two workers use the same name, Docker will fail because that container name is already in use.
+
+The \texttt{--cpuset-cpus} option pins a worker container to specific host CPU cores. The example uses cores \texttt{0} and \texttt{1}. If the host machine does not have enough CPU cores, the CPU set must be reduced, for example to \texttt{--cpuset-cpus="0"}, or the \texttt{--cpuset-cpus} line can be removed so Docker can schedule the container on any available core.
 
 \section{Conclusion}
 

@@ -4,6 +4,7 @@
 #include <stdint.h>
 #include <time.h>
 
+/* Message types identify how the master should treat each fixed-size frame. */
 typedef enum {
     MSG_HEARTBEAT = 0,
     MSG_TASK      = 1,
@@ -18,6 +19,7 @@ typedef enum {
     WORKER_OFFLINE = 2
 } WorkerStatus;
 
+/* Workload codes are shared by submit clients, the master scheduler, and workers. */
 typedef enum {
     CMD_PRIME          = 1,  /* argument = upper bound; result = prime count */
     CMD_MATRIX         = 2,  /* argument = matrix size; result = checksum */

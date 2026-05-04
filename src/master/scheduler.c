@@ -1,5 +1,16 @@
 #include "scheduler.h"
 #include "../shared/protocol.h"
+
+/*
+ * Scheduler and worker-registry implementation.
+ *
+ * The scheduler thread is the only component that removes tasks from the
+ * queue and assigns them to workers. The registry lock protects worker state
+ * such as current task, heartbeat time, and runtime metrics. When a worker is
+ * stale or a send fails, the scheduler snapshots the unfinished task and
+ * requeues it so work is not lost.
+ */
+
 #include <stdio.h>
 #include <string.h>
 #include <sys/socket.h>

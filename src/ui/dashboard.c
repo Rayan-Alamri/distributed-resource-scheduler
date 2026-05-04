@@ -2,6 +2,15 @@
 
 #include "../master/status.h"
 
+/*
+ * ncurses dashboard for the master process.
+ *
+ * The UI never reads live master structures directly. It asks status.c for a
+ * point-in-time MasterSnapshot, renders that copy, and submits new work through
+ * server.c APIs. This keeps the dashboard responsive and avoids holding locks
+ * while drawing to the terminal.
+ */
+
 #include <dirent.h>
 #include <locale.h>
 #include <ncurses.h>
@@ -88,6 +97,10 @@ typedef struct {
     char status[512];
 } VideoPipeline;
 
+/*
+ * Form state is display-only interaction state, not scheduler state. The
+ * master only receives validated submit/video requests from these forms.
+ */
 static DashboardMode dashboard_mode = DASHBOARD_MODE_MONITOR;
 static SubmitForm submit_form;
 static VideoForm video_form;
@@ -251,6 +264,7 @@ static void refresh_video_files(void) {
     DIR *dp;
     struct dirent *entry;
 
+    /* Re-scan videos/input each time the user opens or refreshes the form. */
     video_form.file_count = 0;
     video_form.selected = 0;
     snprintf(input_dir, sizeof(input_dir), "%s/input", master_video_dir());
@@ -383,6 +397,10 @@ static void submit_video_form(void) {
 
     snprintf(video_form.message, sizeof(video_form.message),
              "Splitting %.200s...", video_form.files[video_form.selected]);
+    /*
+     * The master performs split + enqueue synchronously, then workers process
+     * segments asynchronously. Completion is detected in update_video_pipeline.
+     */
     status = master_process_video(dashboard_master,
                                   video_form.files[video_form.selected],
                                   video_form.segment_seconds,
@@ -421,6 +439,10 @@ static void update_video_pipeline(const MasterSnapshot *snapshot) {
     if (snapshot->job.completed < video_pipeline.expected_segments)
         return;
 
+    /*
+     * Once all segment tasks finish, merge exactly once. The active flag guards
+     * against repeated merges during later dashboard refreshes.
+     */
     video_pipeline.active = 0;
     if (snapshot->job.failed > 0) {
         snprintf(video_pipeline.status, sizeof(video_pipeline.status),
@@ -1083,6 +1105,10 @@ static void render_dashboard(void) {
 
     master_get_snapshot(dashboard_master, &snapshot);
     update_video_pipeline(&snapshot);
+    /*
+     * update_video_pipeline may merge video and change the activity message.
+     * Take a fresh snapshot afterward so rendered job state and activity align.
+     */
     master_get_snapshot(dashboard_master, &snapshot);
     getmaxyx(stdscr, rows, cols);
     erase();
@@ -1224,6 +1250,10 @@ int dashboard_init(MasterState *master) {
         return -1;
 
     setlocale(LC_ALL, "");
+    /*
+     * The master often redirects stdout/stderr to logs. Opening /dev/tty lets
+     * ncurses still control the interactive terminal directly.
+     */
     dashboard_tty_in = fopen("/dev/tty", "r");
     dashboard_tty_out = fopen("/dev/tty", "w");
     if (!dashboard_tty_in || !dashboard_tty_out) {

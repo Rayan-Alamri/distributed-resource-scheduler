@@ -1,5 +1,14 @@
 #include "status.h"
 
+/*
+ * Read-only status projection for the dashboard and optional JSON clients.
+ *
+ * The master has multiple writer threads, so UI code must not walk live queue,
+ * registry, or job structures directly. This module copies the needed fields
+ * under their locks into a compact snapshot that can be rendered without
+ * blocking scheduler or worker threads.
+ */
+
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
@@ -44,6 +53,11 @@ void master_get_snapshot(MasterState *ms, MasterSnapshot *out) {
     out->generated_at = now;
     out->queue_depth = queue_size(&ms->queue);
 
+    /*
+     * Copy worker rows while holding the registry lock, then release it before
+     * formatting or rendering. This keeps the UI responsive and avoids lock
+     * chains with the scheduler.
+     */
     pthread_mutex_lock(&ms->registry.lock);
     for (int i = 0; i < MAX_WORKERS; i++) {
         WorkerInfo *w = &ms->registry.workers[i];
@@ -70,6 +84,7 @@ void master_get_snapshot(MasterState *ms, MasterSnapshot *out) {
     }
     pthread_mutex_unlock(&ms->registry.lock);
 
+    /* Job counters are protected separately from the worker registry. */
     pthread_mutex_lock(&ms->job.lock);
     out->job.active = ms->job.active;
     out->job.job_id = ms->job.job_id;
@@ -102,6 +117,7 @@ static size_t append_json(char *buf, size_t len, size_t used, const char *fmt, .
     if (written < 0)
         return used;
 
+    /* Report truncation by returning len; the final caller null-terminates. */
     if ((size_t)written >= len - used)
         return len;
 

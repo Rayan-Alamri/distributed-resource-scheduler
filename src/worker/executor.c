@@ -1,5 +1,14 @@
 #include "executor.h"
 
+/*
+ * Worker-side workload executor.
+ *
+ * executor_run_task() forks a child for each task so workload crashes or
+ * FFmpeg failures do not corrupt the worker's network loop. The child writes a
+ * uint32 result through a pipe; the parent waits, validates status, and returns
+ * the result to worker/client.c.
+ */
+
 #include <errno.h>
 #include <fcntl.h>
 #include <signal.h>

@@ -2,6 +2,10 @@ CC     = gcc
 CFLAGS = -Wall -Wextra -g -pthread
 LDFLAGS_NCURSES = -lncurses
 
+# Build graph for the project. Each executable lists its source modules
+# explicitly so the report's project structure maps directly to the compiler
+# commands used by `make`, `make test`, and the Docker image build.
+
 MASTER_SRCS = src/master/server.c \
               src/master/scheduler.c \
               src/master/queue_mgr.c \
