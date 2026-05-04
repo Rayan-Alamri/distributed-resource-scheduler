@@ -39,6 +39,15 @@ static void test_executor_matrix_task(void) {
     PASS("executor_matrix_task");
 }
 
+static void test_executor_matrix_parallel_task(void) {
+    NetworkPayload task = make_task(108, CMD_MATRIX_PARALLEL, 0);
+    uint32_t result = 0;
+    task.result = 2;
+    assert(executor_run_task(&task, &result) == EXECUTOR_OK);
+    assert(result == 187);
+    PASS("executor_matrix_parallel_task");
+}
+
 static void test_executor_prime_range(void) {
     /* Primes in [10, 20]: 11, 13, 17, 19 = 4 primes */
     NetworkPayload task = make_task(102, CMD_PRIME_RANGE, 10);
@@ -154,6 +163,7 @@ int main(void) {
 
     test_executor_prime_task();
     test_executor_matrix_task();
+    test_executor_matrix_parallel_task();
     test_executor_prime_range();
     test_executor_prime_range_full();
     test_executor_monte_carlo();

@@ -2,8 +2,11 @@
 #include "../shared/protocol.h"
 #include <stdio.h>
 #include <string.h>
+#include <sys/socket.h>
 #include <unistd.h>
 #include <time.h>
+
+#define WORKER_HEARTBEAT_TIMEOUT_SEC 15
 
 static const char *now(void) {
     static char buf[9];
@@ -23,6 +26,7 @@ static const char *cmd_name(uint32_t cmd) {
     case CMD_MANDELBROT:     return "mandelbrot";
     case CMD_FFMPEG_SEGMENT: return "ffmpeg_segment";
     case CMD_FFMPEG_SCRIPT:  return "ffmpeg_script";
+    case CMD_MATRIX_PARALLEL: return "matrix_parallel";
     default:                 return "unknown";
     }
 }
@@ -30,6 +34,10 @@ static const char *cmd_name(uint32_t cmd) {
 static void print_task_fields(const NetworkPayload *task) {
     if ((CommandCode)task->command_code == CMD_PRIME_RANGE) {
         printf("task_id=%u cmd=%u(%s) arg=%u range_end=%u",
+               task->task_id, task->command_code, cmd_name(task->command_code),
+               task->argument, task->result);
+    } else if ((CommandCode)task->command_code == CMD_MATRIX_PARALLEL) {
+        printf("task_id=%u cmd=%u(%s) row_start=%u matrix_size=%u",
                task->task_id, task->command_code, cmd_name(task->command_code),
                task->argument, task->result);
     } else {
@@ -141,11 +149,61 @@ WorkerInfo *registry_get(WorkerRegistry *r, uint32_t worker_id) {
 
 /* ── Scheduler thread ────────────────────────────────────────────────────── */
 
+static void scheduler_expire_stale_workers(Scheduler *s) {
+    NetworkPayload orphaned[MAX_WORKERS];
+    int orphan_count = 0;
+    int fds[MAX_WORKERS];
+    uint32_t worker_ids[MAX_WORKERS];
+    int fd_count = 0;
+    time_t current_time = time(NULL);
+
+    pthread_mutex_lock(&s->registry->lock);
+    for (int i = 0; i < MAX_WORKERS; i++) {
+        WorkerInfo *w = &s->registry->workers[i];
+        if (w->sock_fd == -1 || w->last_heartbeat == 0)
+            continue;
+        if (current_time - w->last_heartbeat <= WORKER_HEARTBEAT_TIMEOUT_SEC)
+            continue;
+
+        printf("[%s][scheduler] heartbeat_timeout: worker=%u age=%lds status=%s\n",
+               now(), w->worker_id, (long)(current_time - w->last_heartbeat),
+               w->status == WORKER_BUSY ? "busy" : "idle");
+
+        if (w->status == WORKER_BUSY && w->current_task.task_id != 0)
+            orphaned[orphan_count++] = w->current_task;
+
+        fds[fd_count] = w->sock_fd;
+        worker_ids[fd_count] = w->worker_id;
+        fd_count++;
+
+        w->status = WORKER_OFFLINE;
+        w->sock_fd = -1;
+        w->task_started_at = 0;
+        if (s->registry->count > 0)
+            s->registry->count--;
+    }
+    pthread_mutex_unlock(&s->registry->lock);
+
+    for (int i = 0; i < orphan_count; i++) {
+        fprintf(stderr, "[%s][scheduler] requeueing stale-worker task %u\n",
+                now(), orphaned[i].task_id);
+        queue_requeue(s->queue, &orphaned[i]);
+    }
+
+    for (int i = 0; i < fd_count; i++) {
+        fprintf(stderr, "[%s][scheduler] worker %u marked offline after heartbeat timeout\n",
+                now(), worker_ids[i]);
+        shutdown(fds[i], SHUT_RDWR);
+    }
+}
+
 static void *scheduler_loop(void *arg) {
     Scheduler *s = (Scheduler *)arg;
     NetworkPayload task;
 
     while (s->running) {
+        scheduler_expire_stale_workers(s);
+
         /*
          * Use a non-blocking dequeue so scheduler_stop() can end the thread
          * without needing to inject a sentinel task into the queue.

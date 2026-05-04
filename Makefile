@@ -130,6 +130,9 @@ demo-prime: bin/submit
 demo-matrix: bin/submit
 	./bin/submit -h $(MASTER_HOST) -p $(MASTER_PORT) -c 2 -n 10 -a 500 -i 200
 
+demo-matrix-parallel: bin/submit
+	./bin/submit -h $(MASTER_HOST) -p $(MASTER_PORT) -c 8 -n 10 -a 0 -s 100 -e 1000 -i 200
+
 demo-monte-carlo: bin/submit
 	./bin/submit -h $(MASTER_HOST) -p $(MASTER_PORT) -c 4 -n 4 -a 10000000
 

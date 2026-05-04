@@ -25,7 +25,8 @@ typedef enum {
     CMD_MONTE_CARLO    = 4,  /* argument = sample count; result = inside-circle count */
     CMD_MANDELBROT     = 5,  /* argument = row_start (100-row chunks); result = checksum */
     CMD_FFMPEG_SEGMENT = 6,  /* argument = segment_id; result = FFMPEG_RESULT_* */
-    CMD_FFMPEG_SCRIPT  = 7   /* argument = segment_id; task_id = script ref; result = FFMPEG_RESULT_* */
+    CMD_FFMPEG_SCRIPT  = 7,  /* argument = segment_id; task_id = script ref; result = FFMPEG_RESULT_* */
+    CMD_MATRIX_PARALLEL = 8  /* argument = row_start; result(task) = matrix size */
 } CommandCode;
 
 /* Result codes for FFmpeg tasks (CMD_FFMPEG_SEGMENT / CMD_FFMPEG_SCRIPT) */
@@ -39,7 +40,8 @@ typedef enum {
  * Fixed-size network payload — all fields in network byte order on the wire.
  *
  * When used as MSG_TASK, the `result` field carries an optional second
- * argument.  Currently used by CMD_PRIME_RANGE where result = range_end.
+ * argument.  Currently used by CMD_PRIME_RANGE where result = range_end and
+ * CMD_MATRIX_PARALLEL where result = matrix size.
  */
 typedef struct {
     uint32_t type;          /* MessageType */

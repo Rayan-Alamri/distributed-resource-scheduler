@@ -29,6 +29,7 @@ typedef struct {
     uint32_t  failed;
     uint64_t  sum_results;
     uint64_t  sum_arguments;
+    uint64_t  elapsed_ms;
 } JobSnapshot;
 
 typedef struct {

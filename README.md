@@ -185,6 +185,7 @@ The system should handle worker or socket failure gracefully.
 ### Required behavior
 - Catch socket communication failures
 - Mark disconnected workers as `"Offline"`
+- Mark workers offline after 15 seconds without a heartbeat
 - Re-queue orphaned or incomplete tasks
 - Preserve scheduler stability under partial node failure
 

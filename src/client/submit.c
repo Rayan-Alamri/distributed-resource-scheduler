@@ -29,15 +29,16 @@ static void usage(const char *prog) {
         "  -c CMD      workload command code      (default: %d)\n"
         "              1=prime          argument = upper bound\n"
         "              2=matrix         argument = matrix size\n"
-        "              3=prime_range    argument = range_start  (use -s for chunk size)\n"
-        "              4=monte_carlo    argument = sample count\n"
-        "              5=mandelbrot     argument = row_start    (use -s 100)\n"
-        "              6=ffmpeg_segment argument = segment_id   (use -s 1 for sequential)\n"
-        "              7=ffmpeg_script  argument = segment_id   (task_id = script ref)\n"
+        "              3=prime_range    (parallel) argument = range_start  (use -s for chunk size)\n"
+        "              4=monte_carlo    (parallel) argument = sample count\n"
+        "              5=mandelbrot     (parallel) argument = row_start    (use -s 100)\n"
+        "              6=ffmpeg_segment (parallel) argument = segment_id   (use -s 1 for sequential)\n"
+        "              7=ffmpeg_script  (parallel) argument = segment_id   (task_id = script ref)\n"
+        "              8=matrix_parallel (parallel) argument = row_start, -e = matrix size\n"
         "  -a ARG      primary argument           (default: %u)\n"
         "  -s STEP     increment argument by STEP per task (default: 0)\n"
         "              For cmd=3: also derives range_end = arg + step - 1 per chunk\n"
-        "  -e END      explicit range_end for cmd=3 (single task, no -s needed)\n"
+        "  -e END      range_end for cmd=3, matrix size for cmd=8\n"
         "  -i ID       starting task ID           (default: %u)\n"
         "\n"
         "Environment variables (overridden by flags):\n"
@@ -51,11 +52,12 @@ static void usage(const char *prog) {
         "  %s -c 4 -n 4 -a 10000000              # Monte Carlo Pi: 4 x 10M samples\n"
         "  %s -c 5 -n 6 -a 0 -s 100              # Mandelbrot: 6 x 100-row chunks\n"
         "  %s -c 6 -n 12 -a 0 -s 1 -i 300        # FFmpeg: 12 segments (0-11)\n"
-        "  %s -c 7 -n 4  -a 0 -s 1 -i 400        # FFmpeg script: segments 0-3\n",
+        "  %s -c 7 -n 4  -a 0 -s 1 -i 400        # FFmpeg script: segments 0-3\n"
+        "  %s -c 8 -n 10 -a 0 -s 100 -e 1000     # parallel matrix: size 1000\n",
         prog,
         DEFAULT_HOST, DEFAULT_PORT, DEFAULT_COUNT, DEFAULT_CMD,
         DEFAULT_ARG, DEFAULT_START_ID,
-        prog, prog, prog, prog, prog, prog, prog);
+        prog, prog, prog, prog, prog, prog, prog, prog);
 }
 
 static uint32_t parse_u32(const char *s) {
@@ -76,6 +78,7 @@ static const char *cmd_name(uint32_t cmd) {
     case CMD_MANDELBROT:     return "mandelbrot";
     case CMD_FFMPEG_SEGMENT: return "ffmpeg_segment";
     case CMD_FFMPEG_SCRIPT:  return "ffmpeg_script";
+    case CMD_MATRIX_PARALLEL: return "matrix_parallel";
     default:                 return "unknown";
     }
 }
@@ -123,8 +126,12 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "submit: -n must be between 1 and 1000\n");
         return 1;
     }
-    if (cmd < 1 || cmd > 7) {
-        fprintf(stderr, "submit: -c must be 1-7 (see -? for details)\n");
+    if (cmd < 1 || cmd > 8) {
+        fprintf(stderr, "submit: -c must be 1-8 (see -? for details)\n");
+        return 1;
+    }
+    if (cmd == CMD_MATRIX_PARALLEL && range_end == 0) {
+        fprintf(stderr, "submit: cmd=8 requires -e MATRIX_SIZE\n");
         return 1;
     }
 
@@ -172,14 +179,15 @@ int main(int argc, char *argv[]) {
         task.argument     = arg + (uint32_t)i * step;
 
         /*
-         * For CMD_PRIME_RANGE the `result` field in a task packet carries
-         * range_end.  Derive it from step when step > 0, otherwise use the
-         * explicit -e value.
+         * Some workloads use `result` as a second task argument before the
+         * worker overwrites it with the computed result.
          */
         if (cmd == CMD_PRIME_RANGE) {
             task.result = (step > 0)
                 ? task.argument + step - 1
                 : range_end;
+        } else if (cmd == CMD_MATRIX_PARALLEL) {
+            task.result = range_end;
         }
 
         payload_to_net(&task);
@@ -192,6 +200,9 @@ int main(int argc, char *argv[]) {
         payload_to_host(&task);
         if (cmd == CMD_PRIME_RANGE)
             printf("[submit] queued  task_id=%-4u  cmd=%u(%s)  arg=%u..%u\n",
+                   task.task_id, cmd, cmd_name(cmd), task.argument, task.result);
+        else if (cmd == CMD_MATRIX_PARALLEL)
+            printf("[submit] queued  task_id=%-4u  cmd=%u(%s)  row_start=%u  matrix_size=%u\n",
                    task.task_id, cmd, cmd_name(cmd), task.argument, task.result);
         else
             printf("[submit] queued  task_id=%-4u  cmd=%u(%s)  arg=%u\n",

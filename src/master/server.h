@@ -19,6 +19,8 @@ typedef struct {
     uint32_t       failed;
     uint64_t       sum_results;
     uint64_t       sum_arguments;
+    uint64_t       started_at_ms;
+    uint64_t       completed_at_ms;
     uint32_t       task_ids[MAX_JOB_TASKS];
     pthread_mutex_t lock;
 } JobSummary;

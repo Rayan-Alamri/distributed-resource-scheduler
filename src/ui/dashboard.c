@@ -492,6 +492,12 @@ static void apply_command_defaults(uint32_t command_code) {
         submit_form.argument = 0;
         submit_form.step = 1;
         break;
+    case CMD_MATRIX_PARALLEL:
+        submit_form.count = 10;
+        submit_form.argument = 0;
+        submit_form.step = 100u;
+        submit_form.range_end = 1000u;
+        break;
     default:
         break;
     }
@@ -520,11 +526,12 @@ static void submit_form_move(int delta) {
 static uint32_t numeric_delta(void) {
     switch (submit_form.field) {
     case SUBMIT_FIELD_ARGUMENT:
-        return submit_form.command_code == CMD_PRIME_RANGE ? 1000u : 1u;
+        return (submit_form.command_code == CMD_PRIME_RANGE ||
+                submit_form.command_code == CMD_MATRIX_PARALLEL) ? 1000u : 1u;
     case SUBMIT_FIELD_STEP:
-        return 1u;
+        return submit_form.command_code == CMD_MATRIX_PARALLEL ? 100u : 1u;
     case SUBMIT_FIELD_RANGE_END:
-        return 1000u;
+        return submit_form.command_code == CMD_MATRIX_PARALLEL ? 100u : 1000u;
     case SUBMIT_FIELD_START_ID:
         return 1u;
     default:
@@ -537,9 +544,9 @@ static void adjust_selected_value(int direction) {
         uint32_t command_code = submit_form.command_code;
 
         if (direction > 0)
-            command_code = command_code >= CMD_FFMPEG_SCRIPT ? CMD_PRIME : command_code + 1;
+            command_code = command_code >= CMD_MATRIX_PARALLEL ? CMD_PRIME : command_code + 1;
         else
-            command_code = command_code <= CMD_PRIME ? CMD_FFMPEG_SCRIPT : command_code - 1;
+            command_code = command_code <= CMD_PRIME ? CMD_MATRIX_PARALLEL : command_code - 1;
         apply_command_defaults(command_code);
         submit_form.replace_on_digit = 1;
         return;
@@ -563,7 +570,7 @@ static void adjust_selected_value(int direction) {
 
 static void set_selected_digit(int digit) {
     if (submit_form.field == SUBMIT_FIELD_COMMAND) {
-        if (digit >= CMD_PRIME && digit <= CMD_FFMPEG_SCRIPT)
+        if (digit >= CMD_PRIME && digit <= CMD_MATRIX_PARALLEL)
             apply_command_defaults((uint32_t)digit);
         return;
     }
@@ -592,9 +599,9 @@ static void backspace_selected_value(void) {
 
 static int validate_submit_form(void) {
     if (submit_form.command_code < CMD_PRIME ||
-        submit_form.command_code > CMD_FFMPEG_SCRIPT) {
+        submit_form.command_code > CMD_MATRIX_PARALLEL) {
         snprintf(submit_form.message, sizeof(submit_form.message),
-                 "Command must be 1 through 7.");
+                 "Command must be 1 through 8.");
         return -1;
     }
 
@@ -609,6 +616,13 @@ static int validate_submit_form(void) {
         submit_form.range_end < submit_form.argument) {
         snprintf(submit_form.message, sizeof(submit_form.message),
                  "Prime range needs step or range end >= argument.");
+        return -1;
+    }
+
+    if (submit_form.command_code == CMD_MATRIX_PARALLEL &&
+        submit_form.range_end == 0) {
+        snprintf(submit_form.message, sizeof(submit_form.message),
+                 "Parallel matrix needs matrix size.");
         return -1;
     }
 
@@ -755,6 +769,7 @@ static void render_job(const MasterSnapshot *snapshot,
                        int y, int x, int height, int width) {
     WINDOW *win;
     char result_line[64];
+    char elapsed[32];
     int meter_width;
 
     if (height < 7 || width < 32)
@@ -765,10 +780,11 @@ static void render_job(const MasterSnapshot *snapshot,
         return;
 
     draw_title(win, "Job");
+    format_duration(snapshot->job.elapsed_ms, elapsed, sizeof(elapsed));
     mvwprintw(win, 2, 2, "State:     %-10s", job_state_name(&snapshot->job));
     mvwprintw(win, 3, 2, "Command:   %-18.18s", command_name(snapshot->job.command_code));
     mvwprintw(win, 4, 2, "Tasks:     %u / %u", snapshot->job.completed, snapshot->job.expected);
-    mvwprintw(win, 5, 2, "Failed:    %u", snapshot->job.failed);
+    mvwprintw(win, 5, 2, "Failed:    %-8u Elapsed: %s", snapshot->job.failed, elapsed);
 
     meter_width = width - 16;
     if (meter_width > 28)
@@ -851,6 +867,16 @@ static void render_activity(const MasterSnapshot *snapshot,
             snprintf(line, sizeof(line), "Worker %u offline; last heartbeat %lus ago.",
                      worker->worker_id, worker->last_heartbeat_age_sec);
             add_activity_line(lines, &count, limit, line);
+
+            if (worker->current_task_id != 0 && count < limit) {
+                snprintf(line, sizeof(line),
+                         "Requeued unfinished task %u (%s arg %u) from worker %u.",
+                         worker->current_task_id,
+                         command_name(worker->current_command_code),
+                         worker->current_argument,
+                         worker->worker_id);
+                add_activity_line(lines, &count, limit, line);
+            }
         }
     }
 
@@ -937,7 +963,10 @@ static void render_submit_form(int rows, int cols) {
 
     snprintf(value, sizeof(value), "%u", submit_form.range_end);
     render_submit_field(win, 6, submit_form.field == SUBMIT_FIELD_RANGE_END,
-                        "Range end", value);
+                        submit_form.command_code == CMD_MATRIX_PARALLEL
+                            ? "Matrix size"
+                            : "Range end",
+                        value);
 
     snprintf(value, sizeof(value), "%u", submit_form.start_id);
     render_submit_field(win, 7, submit_form.field == SUBMIT_FIELD_START_ID,
@@ -960,6 +989,11 @@ static void render_submit_form(int rows, int cols) {
             : submit_form.range_end;
         mvwprintw(win, 11, 3, "First range: %u..%u",
                   submit_form.argument, end_value);
+    } else if (submit_form.command_code == CMD_MATRIX_PARALLEL) {
+        mvwprintw(win, 11, 3, "First rows: %u..%u of size %u",
+                  submit_form.argument,
+                  submit_form.argument + 99u,
+                  submit_form.range_end);
     } else {
         mvwprintw(win, 11, 3, "First argument: %u", submit_form.argument);
     }

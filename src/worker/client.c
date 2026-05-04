@@ -33,6 +33,7 @@ static const char *cmd_name(uint32_t cmd) {
     case CMD_MANDELBROT:     return "mandelbrot";
     case CMD_FFMPEG_SEGMENT: return "ffmpeg_segment";
     case CMD_FFMPEG_SCRIPT:  return "ffmpeg_script";
+    case CMD_MATRIX_PARALLEL: return "matrix_parallel";
     default:                 return "unknown";
     }
 }

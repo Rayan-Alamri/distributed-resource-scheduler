@@ -34,6 +34,15 @@ static const char *now(void) {
     return buf;
 }
 
+static uint64_t monotonic_ms(void) {
+    struct timespec ts;
+
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0)
+        return 0;
+
+    return (uint64_t)ts.tv_sec * 1000ULL + (uint64_t)ts.tv_nsec / 1000000ULL;
+}
+
 static const char *cmd_name(uint32_t cmd) {
     switch ((CommandCode)cmd) {
     case CMD_PRIME:          return "prime";
@@ -43,6 +52,7 @@ static const char *cmd_name(uint32_t cmd) {
     case CMD_MANDELBROT:     return "mandelbrot";
     case CMD_FFMPEG_SEGMENT: return "ffmpeg_segment";
     case CMD_FFMPEG_SCRIPT:  return "ffmpeg_script";
+    case CMD_MATRIX_PARALLEL: return "matrix_parallel";
     default:                 return "unknown";
     }
 }
@@ -50,6 +60,10 @@ static const char *cmd_name(uint32_t cmd) {
 static void print_task_fields(const NetworkPayload *task) {
     if ((CommandCode)task->command_code == CMD_PRIME_RANGE) {
         printf("task_id=%u cmd=%u(%s) arg=%u range_end=%u",
+               task->task_id, task->command_code, cmd_name(task->command_code),
+               task->argument, task->result);
+    } else if ((CommandCode)task->command_code == CMD_MATRIX_PARALLEL) {
+        printf("task_id=%u cmd=%u(%s) row_start=%u matrix_size=%u",
                task->task_id, task->command_code, cmd_name(task->command_code),
                task->argument, task->result);
     } else {
@@ -65,6 +79,28 @@ static int is_ffmpeg_result_success(uint32_t command_code, uint32_t result) {
         return 1;
 
     return result == FFMPEG_RESULT_SUCCESS;
+}
+
+static void cleanup_completed_ffmpeg_segment(const NetworkPayload *task, uint32_t result) {
+    char segment_path[512];
+
+    if (!task || !is_ffmpeg_result_success(task->command_code, result))
+        return;
+    if ((CommandCode)task->command_code != CMD_FFMPEG_SEGMENT &&
+        (CommandCode)task->command_code != CMD_FFMPEG_SCRIPT)
+        return;
+
+    snprintf(segment_path, sizeof(segment_path), "%s/segments/part_%03u.mp4",
+             master_video_dir(), task->argument);
+
+    if (unlink(segment_path) == 0) {
+        printf("[%s][master] segment_cleanup: task_id=%u segment=%u path=%s\n",
+               now(), task->task_id, task->argument, segment_path);
+    } else if (errno != ENOENT) {
+        fprintf(stderr, "[%s][master] segment_cleanup_failed: task_id=%u"
+                " segment=%u path=%s error=%s\n",
+                now(), task->task_id, task->argument, segment_path, strerror(errno));
+    }
 }
 
 const char *master_video_dir(void) {
@@ -233,6 +269,8 @@ static void job_start(JobSummary *job, uint32_t command_code) {
     job->failed = 0;
     job->sum_results = 0;
     job->sum_arguments = 0;
+    job->started_at_ms = monotonic_ms();
+    job->completed_at_ms = 0;
     memset(job->task_ids, 0, sizeof(job->task_ids));
     pthread_mutex_unlock(&job->lock);
 }
@@ -268,17 +306,27 @@ static void job_record_result(JobSummary *job, const NetworkPayload *task, uint3
         job->failed++;
 
     if (job->expected > 0 && job->completed >= job->expected) {
+        uint64_t elapsed_ms;
+
+        job->completed_at_ms = monotonic_ms();
+        elapsed_ms = job->completed_at_ms >= job->started_at_ms
+            ? job->completed_at_ms - job->started_at_ms
+            : 0;
+
         printf("[%s][master] job_complete: job=%u cmd=%u(%s)"
-               " tasks=%u failed=%u sum_results=%llu",
+               " tasks=%u failed=%u sum_results=%llu elapsed=%llums",
                now(), job->job_id, job->command_code, cmd_name(job->command_code),
                job->completed, job->failed,
-               (unsigned long long)job->sum_results);
+               (unsigned long long)job->sum_results,
+               (unsigned long long)elapsed_ms);
 
         if ((CommandCode)job->command_code == CMD_MONTE_CARLO && job->sum_arguments > 0) {
             double pi = 4.0 * (double)job->sum_results / (double)job->sum_arguments;
             printf(" pi_estimate=%.6f", pi);
         } else if ((CommandCode)job->command_code == CMD_PRIME_RANGE) {
             printf(" total_primes=%llu", (unsigned long long)job->sum_results);
+        } else if ((CommandCode)job->command_code == CMD_MATRIX_PARALLEL) {
+            printf(" matrix_checksum=%llu", (unsigned long long)job->sum_results);
         } else if ((CommandCode)job->command_code == CMD_FFMPEG_SEGMENT ||
                    (CommandCode)job->command_code == CMD_FFMPEG_SCRIPT) {
             printf(" successful_segments=%u", job->completed - job->failed);
@@ -302,7 +350,7 @@ int master_submit_tasks(MasterState *ms,
                         uint32_t start_id) {
     uint32_t submitted = 0;
 
-    if (!ms || command_code < CMD_PRIME || command_code > CMD_FFMPEG_SCRIPT ||
+    if (!ms || command_code < CMD_PRIME || command_code > CMD_MATRIX_PARALLEL ||
         count == 0 || count > MAX_JOB_TASKS)
         return -1;
 
@@ -321,6 +369,8 @@ int master_submit_tasks(MasterState *ms,
             task.result = step > 0
                 ? task.argument + step - 1
                 : range_end;
+        } else if (command_code == CMD_MATRIX_PARALLEL) {
+            task.result = range_end;
         }
 
         if (queue_enqueue(&ms->queue, &task) == 0) {
@@ -605,6 +655,7 @@ static void *worker_thread(void *arg) {
                            (unsigned long long)runtime_ms,
                            w->tasks_completed, (unsigned long long)avg_ms);
                     job_record_result(&ms->job, &finished_task, pkt.result);
+                    cleanup_completed_ffmpeg_segment(&finished_task, pkt.result);
                 }
             }
             pthread_mutex_unlock(&ms->registry.lock);

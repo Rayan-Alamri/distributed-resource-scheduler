@@ -31,6 +31,7 @@ static const char *video_dir(void) {
 #define MANDELBROT_HEIGHT    600
 #define MANDELBROT_MAX_ITER  100
 #define MANDELBROT_ROW_CHUNK 100
+#define MATRIX_ROW_CHUNK     100
 
 /* ── Algorithmic workloads ─────────────────────────────────────────────────── */
 
@@ -63,6 +64,24 @@ static uint32_t matrix_checksum(uint32_t size) {
     if (size == 0) return 0;
     uint32_t checksum = 0;
     for (uint32_t row = 0; row < size; row++) {
+        for (uint32_t col = 0; col < size; col++) {
+            uint32_t a = (row + 1U) * (col + 3U);
+            uint32_t b = (col + 1U) * (row + 5U);
+            checksum += a * b;
+        }
+    }
+    return checksum;
+}
+
+static uint32_t matrix_chunk_checksum(uint32_t row_start, uint32_t size) {
+    if (size == 0 || row_start >= size) return 0;
+
+    uint32_t checksum = 0;
+    uint32_t row_end = row_start + MATRIX_ROW_CHUNK;
+    if (row_end > size)
+        row_end = size;
+
+    for (uint32_t row = row_start; row < row_end; row++) {
         for (uint32_t col = 0; col < size; col++) {
             uint32_t a = (row + 1U) * (col + 3U);
             uint32_t b = (col + 1U) * (row + 5U);
@@ -214,6 +233,8 @@ static uint32_t execute_workload(const NetworkPayload *task) {
         return count_primes(task->argument);
     case CMD_MATRIX:
         return matrix_checksum(task->argument);
+    case CMD_MATRIX_PARALLEL:
+        return matrix_chunk_checksum(task->argument, task->result);
     case CMD_PRIME_RANGE:
         /* result field repurposed as range_end in task packets */
         return count_primes_range(task->argument, task->result);

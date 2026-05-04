@@ -22,12 +22,23 @@ const char *command_name(uint32_t command_code) {
     case CMD_MANDELBROT:     return "mandelbrot";
     case CMD_FFMPEG_SEGMENT: return "ffmpeg_segment";
     case CMD_FFMPEG_SCRIPT:  return "ffmpeg_script";
+    case CMD_MATRIX_PARALLEL: return "matrix_parallel";
     default:                 return "unknown";
     }
 }
 
+static uint64_t monotonic_ms(void) {
+    struct timespec ts;
+
+    if (clock_gettime(CLOCK_MONOTONIC, &ts) != 0)
+        return 0;
+
+    return (uint64_t)ts.tv_sec * 1000ULL + (uint64_t)ts.tv_nsec / 1000000ULL;
+}
+
 void master_get_snapshot(MasterState *ms, MasterSnapshot *out) {
     time_t now = time(NULL);
+    uint64_t now_ms = monotonic_ms();
 
     memset(out, 0, sizeof(*out));
     out->generated_at = now;
@@ -68,6 +79,12 @@ void master_get_snapshot(MasterState *ms, MasterSnapshot *out) {
     out->job.failed = ms->job.failed;
     out->job.sum_results = ms->job.sum_results;
     out->job.sum_arguments = ms->job.sum_arguments;
+    if (ms->job.started_at_ms > 0) {
+        uint64_t end_ms = ms->job.active ? now_ms : ms->job.completed_at_ms;
+        out->job.elapsed_ms = end_ms >= ms->job.started_at_ms
+            ? end_ms - ms->job.started_at_ms
+            : 0;
+    }
     pthread_mutex_unlock(&ms->job.lock);
 }
 
@@ -125,7 +142,8 @@ size_t master_snapshot_to_json(const MasterSnapshot *snapshot, char *buf, size_t
     used = append_json(buf, len, used,
         "],\"job\":{\"active\":%s,\"job_id\":%u,\"command\":\"%s\","
         "\"expected\":%u,\"completed\":%u,\"failed\":%u,"
-        "\"sum_results\":%llu,\"sum_arguments\":%llu}}",
+        "\"sum_results\":%llu,\"sum_arguments\":%llu,"
+        "\"elapsed_ms\":%llu}}",
         snapshot->job.active ? "true" : "false",
         snapshot->job.job_id,
         command_name(snapshot->job.command_code),
@@ -133,7 +151,8 @@ size_t master_snapshot_to_json(const MasterSnapshot *snapshot, char *buf, size_t
         snapshot->job.completed,
         snapshot->job.failed,
         (unsigned long long)snapshot->job.sum_results,
-        (unsigned long long)snapshot->job.sum_arguments);
+        (unsigned long long)snapshot->job.sum_arguments,
+        (unsigned long long)snapshot->job.elapsed_ms);
 
     if (used >= len)
         buf[len - 1] = '\0';

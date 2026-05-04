@@ -105,6 +105,7 @@ All tests passed.
 === Worker executor tests ===
 [PASS] executor_prime_task
 [PASS] executor_matrix_task
+[PASS] executor_matrix_parallel_task
 [PASS] executor_prime_range
 [PASS] executor_prime_range_full
 [PASS] executor_monte_carlo
@@ -168,6 +169,90 @@ docker compose run --rm -e SUBMIT_CMD=1 -e SUBMIT_COUNT=4 -e SUBMIT_ARG=50000000
 # Or use CLI flags directly (entrypoint is already 'submit', do not repeat it)
 docker compose run --rm submit -c 1 -n 4 -a 50000000
 ```
+
+### 4.5 Fixed-core simulation with `docker run`
+
+Use this when you want manual control over which host CPU cores each worker can use. Check how many CPU threads are available first:
+
+```bash
+nproc
+```
+
+Build the project image and create a private Docker network:
+
+```bash
+docker build -t drs .
+docker network create drs-net
+```
+
+Start the master with the interactive dashboard:
+
+```bash
+docker run --rm -it --name drs-master \
+  --network drs-net \
+  -p 9090:9090 \
+  -e MASTER_PORT=9090 \
+  -e MASTER_DASHBOARD=1 \
+  -e TERM=xterm-256color \
+  -v "$PWD/videos:/videos" \
+  -v "$PWD/logs:/logs" \
+  drs master
+```
+
+Leave the master terminal open. Start each worker in its own terminal. These commands do not use detached mode, so each terminal stays attached to its worker. `--rm` removes the worker container automatically after it stops.
+
+Terminal 2 — worker 1:
+```bash
+docker run --rm -it --name drs-worker-1 \
+  --network drs-net \
+  --cpuset-cpus="0,1" \
+  -e VIDEO_DIR=/videos \
+  -v "$PWD/videos:/videos" \
+  -v "$PWD/logs:/logs" \
+  drs worker drs-master 9090
+```
+
+Terminal 3 — worker 2:
+```bash
+docker run --rm -it --name drs-worker-2 \
+  --network drs-net \
+  --cpuset-cpus="2,3" \
+  -e VIDEO_DIR=/videos \
+  -v "$PWD/videos:/videos" \
+  -v "$PWD/logs:/logs" \
+  drs worker drs-master 9090
+```
+
+Terminal 4 — worker 3:
+```bash
+docker run --rm -it --name drs-worker-3 \
+  --network drs-net \
+  --cpuset-cpus="4,5" \
+  -e VIDEO_DIR=/videos \
+  -v "$PWD/videos:/videos" \
+  -v "$PWD/logs:/logs" \
+  drs worker drs-master 9090
+```
+
+Submit a test workload from another host terminal:
+
+```bash
+./bin/submit -h 127.0.0.1 -p 9090 -c 1 -n 12 -a 10000000
+```
+
+Stop the master and workers with `Ctrl+C` in their terminals. If a terminal does not respond, stop the container from another terminal:
+
+```bash
+docker rm -f drs-worker-1 drs-worker-2 drs-worker-3 drs-master
+```
+
+After all containers stop, remove the simulation network:
+
+```bash
+docker network rm drs-net
+```
+
+If the host has fewer than 6 CPU threads, change the `--cpuset-cpus` ranges. For example, use `"0"`, `"1"`, and `"2"` for three single-core workers.
 
 ---
 
@@ -243,10 +328,10 @@ The `submit` binary connects to the master, sends N task packets, then disconnec
   -h HOST     master hostname        (default: master)
   -p PORT     master port            (default: 9090)
   -n COUNT    number of tasks        (default: 1)
-  -c CMD      command code 1-7       (default: 1)
+  -c CMD      command code 1-8       (default: 1)
   -a ARG      primary argument       (default: 5000000)
   -s STEP     increment ARG by STEP per task (default: 0)
-  -e END      explicit range_end for prime_range (cmd 3, single task)
+  -e END      range_end for cmd 3, matrix size for cmd 8
   -i ID       starting task ID       (default: 100)
 ```
 
@@ -258,6 +343,9 @@ The `submit` binary connects to the master, sends N task packets, then disconnec
 
 # 2 matrix checksum tasks, matrix size 500
 ./bin/submit -c 2 -n 2 -a 500
+
+# 10 parallel matrix chunks for a 1000x1000 matrix
+./bin/submit -c 8 -n 10 -a 0 -s 100 -e 1000
 
 # 10 parallel prime-range tasks covering [1, 100 000 000]
 ./bin/submit -c 3 -n 10 -a 1 -s 10000000
@@ -280,11 +368,12 @@ The `submit` binary connects to the master, sends N task packets, then disconnec
 |-----|------|------------|-------------------|----------------|
 | 1 | `prime` | Upper bound | — | Count of primes ≤ argument |
 | 2 | `matrix` | Matrix size N | — | Checksum of N×N matrix |
-| 3 | `prime_range` | Range start | Range end | Count of primes in [start, end] |
-| 4 | `monte_carlo` | Sample count | — | Points inside unit circle |
-| 5 | `mandelbrot` | Row start | — | Iteration checksum for 100 rows |
-| 6 | `ffmpeg_segment` | Segment ID | — | 1=success 2=timeout 3=missing 4=error |
-| 7 | `ffmpeg_script` | Segment ID | — | 1=success 2=timeout 3=missing 4=error |
+| 3 | `prime_range` (parallel) | Range start | Range end | Count of primes in [start, end] |
+| 4 | `monte_carlo` (parallel) | Sample count | — | Points inside unit circle |
+| 5 | `mandelbrot` (parallel) | Row start | — | Iteration checksum for 100 rows |
+| 6 | `ffmpeg_segment` (parallel) | Segment ID | — | 1=success 2=timeout 3=missing 4=error |
+| 7 | `ffmpeg_script` (parallel) | Segment ID | — | 1=success 2=timeout 3=missing 4=error |
+| 8 | `matrix_parallel` (parallel) | Row start | Matrix size | Checksum for 100 matrix rows |
 
 ### Aggregating parallel results
 
@@ -476,6 +565,16 @@ VIDEO_DIR=./videos ./bin/worker 127.0.0.1 9090
     ```
 
 The task is automatically reassigned to an available worker. No manual intervention needed.
+
+### Heartbeat timeout
+
+Workers send periodic heartbeats. If the master sees no heartbeat from a worker for more than 15 seconds, the scheduler marks that worker offline. If the worker had an assigned task, the scheduler requeues that task:
+
+```
+[scheduler] heartbeat_timeout: worker=2 age=16s status=busy
+[scheduler] requeueing stale-worker task 3
+[scheduler] worker 2 marked offline after heartbeat timeout
+```
 
 ### Reconnect a worker
 
