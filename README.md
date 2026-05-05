@@ -291,6 +291,31 @@ Start one worker in a second terminal:
 
 Start more workers by running the same worker command in additional terminals. In an interactive master terminal, the ncurses dashboard opens automatically. Press `n` to submit a task batch from the dashboard, or press `v` to select a video from `videos/input`, split it, process the segments, and merge the final output.
 
+### Raspberry Pi Worker over LAN from WSL
+
+If the master runs inside WSL and a Raspberry Pi connects over the same LAN, the Pi should connect to the Windows Wi-Fi/Ethernet IP, not the WSL IP. Find the Windows IP with `ipconfig` in PowerShell, then forward port `9090` from Windows to the WSL IP.
+
+In WSL, get the WSL IP:
+
+```bash
+hostname -I
+```
+
+Use the WSL `eth0` address, not Docker bridge addresses such as `172.17.0.1` or `172.19.0.1`. Then run PowerShell as Administrator:
+
+```powershell
+netsh interface portproxy delete v4tov4 listenaddress=0.0.0.0 listenport=9090
+netsh interface portproxy add v4tov4 listenaddress=0.0.0.0 listenport=9090 connectaddress=<wsl-ip> connectport=9090
+New-NetFirewallRule -DisplayName "DRS Master 9090" -Direction Inbound -Protocol TCP -LocalPort 9090 -Action Allow
+```
+
+From the Raspberry Pi, test the TCP port and then start the worker:
+
+```bash
+nc -vz <windows-lan-ip> 9090
+./bin/worker <windows-lan-ip> 9090
+```
+
 Run the unit tests with:
 
 ```bash

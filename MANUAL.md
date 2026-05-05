@@ -318,6 +318,33 @@ VIDEO_DIR=./videos ./bin/worker 127.0.0.1 9090
 ./bin/worker 127.0.0.1 9090
 ```
 
+### Real Raspberry Pi worker over LAN from WSL
+
+If the master runs inside WSL on a Windows laptop, a Raspberry Pi on the same LAN should connect to the Windows Wi-Fi/Ethernet IP, not the WSL IP. Find the Windows LAN IP with `ipconfig` in PowerShell. It usually looks like `192.168.x.x` or `10.x.x.x`.
+
+In WSL, get the current WSL IP:
+
+```bash
+hostname -I
+```
+
+Use the WSL `eth0` address for forwarding. Do not use Docker bridge addresses such as `172.17.0.1` or `172.19.0.1`.
+
+Run PowerShell as Administrator and forward Windows port `9090` to WSL:
+
+```powershell
+netsh interface portproxy delete v4tov4 listenaddress=0.0.0.0 listenport=9090
+netsh interface portproxy add v4tov4 listenaddress=0.0.0.0 listenport=9090 connectaddress=<wsl-ip> connectport=9090
+New-NetFirewallRule -DisplayName "DRS Master 9090" -Direction Inbound -Protocol TCP -LocalPort 9090 -Action Allow
+```
+
+On the Raspberry Pi, test the TCP port and then connect the worker:
+
+```bash
+nc -vz <windows-lan-ip> 9090
+./bin/worker <windows-lan-ip> 9090
+```
+
 ### Terminal 4 — Submit client
 
 ```bash
