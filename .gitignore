@@ -2,5 +2,7 @@
 # Keep the directories themselves with .gitkeep files.
 /videos/input/*
 !/videos/input/.gitkeep
+/videos/processed/*
+!/videos/processed/.gitkeep
 /videos/final/*
 !/videos/final/.gitkeep
