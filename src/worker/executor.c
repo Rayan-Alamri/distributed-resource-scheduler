@@ -220,18 +220,90 @@ static uint32_t ffmpeg_segment(uint32_t segment_id) {
     return FFMPEG_RESULT_SUCCESS;
 }
 
-static uint32_t ffmpeg_script(uint32_t task_id, uint32_t segment_id) {
-    char script[256], seg_arg[16];
-    snprintf(script,  sizeof(script),  "%s/jobs/task_%u.sh", video_dir(), task_id);
-    snprintf(seg_arg, sizeof(seg_arg), "%u", segment_id);
+static int current_input_video(char *path, size_t path_len) {
+    char marker[256];
+    char input_name[256];
+    FILE *fp;
 
-    if (access(script, R_OK | X_OK) != 0) {
-        fprintf(stderr, "[worker] script not found or not executable: %s\n", script);
+    snprintf(marker, sizeof(marker), "%s/.last_input_name", video_dir());
+    fp = fopen(marker, "r");
+    if (!fp) {
+        fprintf(stderr, "[worker] current video marker not found: %s\n", marker);
+        return -1;
+    }
+
+    if (!fgets(input_name, sizeof(input_name), fp)) {
+        fclose(fp);
+        fprintf(stderr, "[worker] current video marker is empty: %s\n", marker);
+        return -1;
+    }
+    fclose(fp);
+
+    input_name[strcspn(input_name, "\r\n")] = '\0';
+    if (input_name[0] == '\0' ||
+        strchr(input_name, '/') != NULL ||
+        strchr(input_name, '\\') != NULL) {
+        fprintf(stderr, "[worker] invalid current video name: %s\n", input_name);
+        return -1;
+    }
+
+    snprintf(path, path_len, "%s/input/%s", video_dir(), input_name);
+    return 0;
+}
+
+static uint32_t ffmpeg_time_range(uint32_t output_id,
+                                  uint32_t start_second,
+                                  uint32_t duration_seconds) {
+    char input[256], output[256], tmp_output[320];
+    char start_arg[16], duration_arg[16];
+    const char *vdir = video_dir();
+
+    if (duration_seconds == 0)
+        return FFMPEG_RESULT_FAILURE;
+
+    if (current_input_video(input, sizeof(input)) != 0)
+        return FFMPEG_RESULT_MISSING;
+
+    snprintf(output, sizeof(output), "%s/processed/part_%03u.mp4",
+             vdir, output_id);
+    snprintf(tmp_output, sizeof(tmp_output), "%s/processed/.part_%03u.tmp.%ld.mp4",
+             vdir, output_id, (long)getpid());
+    snprintf(start_arg, sizeof(start_arg), "%u", start_second);
+    snprintf(duration_arg, sizeof(duration_arg), "%u", duration_seconds);
+
+    if (access(input, R_OK) != 0) {
+        fprintf(stderr, "[worker] input video not found: %s\n", input);
         return FFMPEG_RESULT_MISSING;
     }
 
-    char *argv[] = { script, seg_arg, NULL };
-    return exec_with_timeout(argv, FFMPEG_TIMEOUT_SEC);
+    unlink(output);
+    unlink(tmp_output);
+
+    char *argv[] = {
+        "ffmpeg", "-y",
+        "-ss", start_arg,
+        "-i", input,
+        "-t", duration_arg,
+        "-vf", "scale=1280:720,hue=s=0",
+        "-c:v", "libx264", "-preset", "veryfast",
+        "-c:a", "aac", "-b:a", "128k",
+        "-avoid_negative_ts", "make_zero",
+        tmp_output, NULL
+    };
+    uint32_t result = exec_with_timeout(argv, FFMPEG_TIMEOUT_SEC);
+    if (result != FFMPEG_RESULT_SUCCESS) {
+        unlink(tmp_output);
+        return result;
+    }
+
+    if (rename(tmp_output, output) != 0) {
+        fprintf(stderr, "[worker] failed to publish processed range %s: %s\n",
+                output, strerror(errno));
+        unlink(tmp_output);
+        return FFMPEG_RESULT_FAILURE;
+    }
+
+    return FFMPEG_RESULT_SUCCESS;
 }
 
 /* ── Workload dispatcher ───────────────────────────────────────────────────── */
@@ -253,8 +325,8 @@ static uint32_t execute_workload(const NetworkPayload *task) {
         return mandelbrot_checksum(task->argument, MANDELBROT_ROW_CHUNK);
     case CMD_FFMPEG_SEGMENT:
         return ffmpeg_segment(task->argument);
-    case CMD_FFMPEG_SCRIPT:
-        return ffmpeg_script(task->task_id, task->argument);
+    case CMD_FFMPEG_TIME_RANGE:
+        return ffmpeg_time_range(task->task_id, task->argument, task->result);
     default:
         return task->argument;
     }

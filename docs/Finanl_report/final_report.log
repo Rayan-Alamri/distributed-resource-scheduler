@@ -1,4 +1,4 @@
-This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2026.4.24)  5 MAY 2026 01:01
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (TeX Live 2023/Debian) (preloaded format=pdflatex 2026.4.21)  6 MAY 2026 00:02
 entering extended mode
  restricted \write18 enabled.
  %&-line parsing enabled.
@@ -888,26 +888,25 @@ Package rerunfilecheck Info: File `final_report.out' has not changed.
 (rerunfilecheck)             Checksum: 511A94401A8A002EA1444EFA9590F1C4;5521.
  ) 
 Here is how much of TeX's memory you used:
- 23519 strings out of 476106
- 435662 string characters out of 5793933
+ 23519 strings out of 476182
+ 435662 string characters out of 5795595
  2151975 words of memory out of 5000000
- 45027 multiletter control sequences out of 15000+600000
+ 45018 multiletter control sequences out of 15000+600000
  570395 words of font info for 61 fonts, out of 8000000 for 9000
- 59 hyphenation exceptions out of 8191
- 84i,12n,87p,689b,2120s stack positions out of 10000i,1000n,20000p,200000b,200000s
- </home/mohya/.texlive2023/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm0600.600
-pk> </home/mohya/.texlive2023/texmf-var/fonts/pk/ljfour/jknappen/ec/ectt1200.60
-0pk> </home/mohya/.texlive2023/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm1095.6
-00pk> </home/mohya/.texlive2023/texmf-var/fonts/pk/ljfour/jknappen/ec/ectt1095.
-600pk> </home/mohya/.texlive2023/texmf-var/fonts/pk/ljfour/jknappen/ec/tcrm1200
-.600pk> </home/mohya/.texlive2023/texmf-var/fonts/pk/ljfour/jknappen/ec/ecbx172
-8.600pk> </home/mohya/.texlive2023/texmf-var/fonts/pk/ljfour/jknappen/ec/ecbx12
-00.600pk> </home/mohya/.texlive2023/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm1
-440.600pk> </home/mohya/.texlive2023/texmf-var/fonts/pk/ljfour/jknappen/ec/ecbx
-2074.600pk> </home/mohya/.texlive2023/texmf-var/fonts/pk/ljfour/jknappen/ec/ecb
-x1440.600pk> </home/mohya/.texlive2023/texmf-var/fonts/pk/ljfour/jknappen/ec/ec
-rm1200.600pk>
-Output written on final_report.pdf (17 pages, 736126 bytes).
+ 14 hyphenation exceptions out of 8191
+ 84i,12n,87p,699b,2120s stack positions out of 10000i,1000n,20000p,200000b,200000s
+ </home/sus/.texlive2023/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm0600.600pk
+> </home/sus/.texlive2023/texmf-var/fonts/pk/ljfour/jknappen/ec/ectt1200.600pk>
+ </home/sus/.texlive2023/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm1095.600pk> 
+</home/sus/.texlive2023/texmf-var/fonts/pk/ljfour/jknappen/ec/ectt1095.600pk> <
+/home/sus/.texlive2023/texmf-var/fonts/pk/ljfour/jknappen/ec/tcrm1200.600pk> </
+home/sus/.texlive2023/texmf-var/fonts/pk/ljfour/jknappen/ec/ecbx1728.600pk> </h
+ome/sus/.texlive2023/texmf-var/fonts/pk/ljfour/jknappen/ec/ecbx1200.600pk> </ho
+me/sus/.texlive2023/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm1440.600pk> </hom
+e/sus/.texlive2023/texmf-var/fonts/pk/ljfour/jknappen/ec/ecbx2074.600pk> </home
+/sus/.texlive2023/texmf-var/fonts/pk/ljfour/jknappen/ec/ecbx1440.600pk> </home/
+sus/.texlive2023/texmf-var/fonts/pk/ljfour/jknappen/ec/ecrm1200.600pk>
+Output written on final_report.pdf (17 pages, 736347 bytes).
 PDF statistics:
  876 PDF objects out of 1000 (max. 8388607)
  401 compressed objects within 5 object streams

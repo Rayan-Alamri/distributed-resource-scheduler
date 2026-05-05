@@ -30,7 +30,7 @@ const char *command_name(uint32_t command_code) {
     case CMD_MONTE_CARLO:    return "monte_carlo";
     case CMD_MANDELBROT:     return "mandelbrot";
     case CMD_FFMPEG_SEGMENT: return "ffmpeg_segment";
-    case CMD_FFMPEG_SCRIPT:  return "ffmpeg_script";
+    case CMD_FFMPEG_TIME_RANGE: return "ffmpeg_time_range";
     case CMD_MATRIX_PARALLEL: return "matrix_parallel";
     default:                 return "unknown";
     }

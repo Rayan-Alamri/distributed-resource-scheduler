@@ -62,7 +62,7 @@ static const char *cmd_name(uint32_t cmd) {
     case CMD_MONTE_CARLO:    return "monte_carlo";
     case CMD_MANDELBROT:     return "mandelbrot";
     case CMD_FFMPEG_SEGMENT: return "ffmpeg_segment";
-    case CMD_FFMPEG_SCRIPT:  return "ffmpeg_script";
+    case CMD_FFMPEG_TIME_RANGE: return "ffmpeg_time_range";
     case CMD_MATRIX_PARALLEL: return "matrix_parallel";
     default:                 return "unknown";
     }
@@ -77,6 +77,10 @@ static void print_task_fields(const NetworkPayload *task) {
         printf("task_id=%u cmd=%u(%s) row_start=%u matrix_size=%u",
                task->task_id, task->command_code, cmd_name(task->command_code),
                task->argument, task->result);
+    } else if ((CommandCode)task->command_code == CMD_FFMPEG_TIME_RANGE) {
+        printf("task_id=%u cmd=%u(%s) start=%us duration=%us",
+               task->task_id, task->command_code, cmd_name(task->command_code),
+               task->argument, task->result);
     } else {
         printf("task_id=%u cmd=%u(%s) arg=%u",
                task->task_id, task->command_code, cmd_name(task->command_code),
@@ -86,7 +90,7 @@ static void print_task_fields(const NetworkPayload *task) {
 
 static int is_ffmpeg_result_success(uint32_t command_code, uint32_t result) {
     if ((CommandCode)command_code != CMD_FFMPEG_SEGMENT &&
-        (CommandCode)command_code != CMD_FFMPEG_SCRIPT)
+        (CommandCode)command_code != CMD_FFMPEG_TIME_RANGE)
         return 1;
 
     return result == FFMPEG_RESULT_SUCCESS;
@@ -97,8 +101,7 @@ static void cleanup_completed_ffmpeg_segment(const NetworkPayload *task, uint32_
 
     if (!task || !is_ffmpeg_result_success(task->command_code, result))
         return;
-    if ((CommandCode)task->command_code != CMD_FFMPEG_SEGMENT &&
-        (CommandCode)task->command_code != CMD_FFMPEG_SCRIPT)
+    if ((CommandCode)task->command_code != CMD_FFMPEG_SEGMENT)
         return;
 
     snprintf(segment_path, sizeof(segment_path), "%s/segments/part_%03u.mp4",
@@ -189,6 +192,71 @@ static int run_process(char *const argv[]) {
     return WEXITSTATUS(status);
 }
 
+static int probe_video_duration_seconds(const char *input_path) {
+    int pipefd[2];
+    pid_t pid;
+    char output[128];
+    size_t used = 0;
+    int status = 0;
+    double duration;
+
+    if (pipe(pipefd) != 0)
+        return -1;
+
+    pid = fork();
+    if (pid < 0) {
+        close(pipefd[0]);
+        close(pipefd[1]);
+        return -1;
+    }
+
+    if (pid == 0) {
+        dup2(pipefd[1], STDOUT_FILENO);
+        close(pipefd[0]);
+        close(pipefd[1]);
+        char *argv[] = {
+            "ffprobe",
+            "-v", "error",
+            "-show_entries", "format=duration",
+            "-of", "default=noprint_wrappers=1:nokey=1",
+            (char *)input_path,
+            NULL
+        };
+        execvp(argv[0], argv);
+        _exit(127);
+    }
+
+    close(pipefd[1]);
+    while (used + 1 < sizeof(output)) {
+        ssize_t n = read(pipefd[0], output + used, sizeof(output) - used - 1);
+        if (n < 0) {
+            if (errno == EINTR)
+                continue;
+            close(pipefd[0]);
+            return -1;
+        }
+        if (n == 0)
+            break;
+        used += (size_t)n;
+    }
+    close(pipefd[0]);
+    output[used] = '\0';
+
+    while (waitpid(pid, &status, 0) < 0) {
+        if (errno == EINTR)
+            continue;
+        return -1;
+    }
+    if (!WIFEXITED(status) || WEXITSTATUS(status) != 0)
+        return -1;
+
+    duration = strtod(output, NULL);
+    if (duration <= 0.0 || duration > (double)0xFFFFFFFFu)
+        return -1;
+
+    return (int)((uint32_t)duration + (duration > (double)(uint32_t)duration));
+}
+
 static int parse_part_id(const char *name, unsigned *id_out) {
     unsigned id;
     char extra;
@@ -264,6 +332,18 @@ static void input_stem(const char *input_name, char *stem, size_t stem_len) {
     dot = strrchr(stem, '.');
     if (dot && dot != stem)
         stem[dot - stem] = '\0';
+}
+
+static void remember_video_input(const char *vdir, const char *input_name) {
+    char last_input_path[512];
+    FILE *last_input;
+
+    snprintf(last_input_path, sizeof(last_input_path), "%s/.last_input_name", vdir);
+    last_input = fopen(last_input_path, "w");
+    if (last_input) {
+        fprintf(last_input, "%s\n", input_name);
+        fclose(last_input);
+    }
 }
 
 static void job_init(JobSummary *job) {
@@ -344,8 +424,8 @@ static void job_record_result(JobSummary *job, const NetworkPayload *task, uint3
         } else if ((CommandCode)job->command_code == CMD_MATRIX_PARALLEL) {
             printf(" matrix_checksum=%llu", (unsigned long long)job->sum_results);
         } else if ((CommandCode)job->command_code == CMD_FFMPEG_SEGMENT ||
-                   (CommandCode)job->command_code == CMD_FFMPEG_SCRIPT) {
-            printf(" successful_segments=%u", job->completed - job->failed);
+                   (CommandCode)job->command_code == CMD_FFMPEG_TIME_RANGE) {
+            printf(" successful_video_tasks=%u", job->completed - job->failed);
         }
 
         printf("\n");
@@ -380,6 +460,8 @@ int master_submit_tasks(MasterState *ms,
         task.task_id = start_id + i;
         task.command_code = command_code;
         task.argument = argument + i * step;
+        if (command_code == CMD_FFMPEG_TIME_RANGE && step == 0 && range_end > 0)
+            task.argument = argument + i * range_end;
 
         if (command_code == CMD_PRIME_RANGE) {
             task.result = step > 0
@@ -387,6 +469,8 @@ int master_submit_tasks(MasterState *ms,
                 : range_end;
         } else if (command_code == CMD_MATRIX_PARALLEL) {
             task.result = range_end;
+        } else if (command_code == CMD_FFMPEG_TIME_RANGE) {
+            task.result = step > 0 ? step : range_end;
         }
 
         if (queue_enqueue(&ms->queue, &task) == 0) {
@@ -412,6 +496,7 @@ int master_submit_tasks(MasterState *ms,
 
 int master_process_video(MasterState *ms,
                          const char *input_name,
+                         VideoProcessMode mode,
                          uint32_t segment_seconds,
                          uint32_t start_id,
                          uint32_t *segment_count_out,
@@ -424,8 +509,6 @@ int master_process_video(MasterState *ms,
     char final_dir[512];
     char output_pattern[1024];
     char segment_time[16];
-    char last_input_path[512];
-    FILE *last_input;
     int segment_count;
     int submitted;
 
@@ -461,6 +544,44 @@ int master_process_video(MasterState *ms,
     remove_matching_files(segments_dir, "part_*.mp4");
     remove_matching_files(processed_dir, "part_*.mp4");
     remove_matching_files(processed_dir, ".part_*.tmp.*.mp4");
+    remember_video_input(vdir, input_name);
+
+    if (mode == VIDEO_PROCESS_TIME_RANGE) {
+        int duration_seconds = probe_video_duration_seconds(input);
+
+        if (duration_seconds <= 0) {
+            snprintf(message, message_len, "Could not read video duration.");
+            return -1;
+        }
+
+        segment_count = (duration_seconds + (int)segment_seconds - 1) /
+            (int)segment_seconds;
+        if (segment_count <= 0) {
+            snprintf(message, message_len, "No time ranges were created.");
+            return -1;
+        }
+        if (segment_count > MAX_JOB_TASKS) {
+            snprintf(message, message_len, "Too many time ranges: %d.", segment_count);
+            return -1;
+        }
+
+        submitted = master_submit_tasks(ms, CMD_FFMPEG_TIME_RANGE,
+                                        (uint32_t)segment_count,
+                                        0, segment_seconds, segment_seconds,
+                                        start_id);
+        if (submitted != segment_count) {
+            snprintf(message, message_len, "Queued %d of %d time ranges.",
+                     submitted, segment_count);
+            return -1;
+        }
+
+        if (segment_count_out)
+            *segment_count_out = (uint32_t)segment_count;
+        snprintf(message, message_len,
+                 "Queued %d time-range task(s) for %s.",
+                 segment_count, input_name);
+        return 0;
+    }
 
     snprintf(segment_time, sizeof(segment_time), "%u", segment_seconds);
     char *argv[] = {
@@ -487,13 +608,6 @@ int master_process_video(MasterState *ms,
     if (segment_count > MAX_JOB_TASKS) {
         snprintf(message, message_len, "Too many segments: %d.", segment_count);
         return -1;
-    }
-
-    snprintf(last_input_path, sizeof(last_input_path), "%s/.last_input_name", vdir);
-    last_input = fopen(last_input_path, "w");
-    if (last_input) {
-        fprintf(last_input, "%s\n", input_name);
-        fclose(last_input);
     }
 
     submitted = master_submit_tasks(ms, CMD_FFMPEG_SEGMENT,

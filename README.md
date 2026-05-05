@@ -290,7 +290,7 @@ Start one worker in a second terminal:
 ./bin/worker 127.0.0.1 9090
 ```
 
-Start more workers by running the same worker command in additional terminals. In an interactive master terminal, the ncurses dashboard opens automatically. Press `n` to submit a task batch from the dashboard, or press `v` to select a video from `videos/input`, split it, process the segments, and merge the final output.
+Start more workers by running the same worker command in additional terminals. In an interactive master terminal, the ncurses dashboard opens automatically. Press `n` to submit a non-video task batch, or press `v` to process a video from `videos/input`. The video form lets you choose either segment-file processing or time-range processing before merging the final output.
 
 ### Raspberry Pi Worker over LAN from WSL
 

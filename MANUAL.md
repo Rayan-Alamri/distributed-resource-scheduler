@@ -297,8 +297,8 @@ queue the tasks. Press Esc to cancel the form.
 
 Press `v` to process a whole video. The dashboard lists videos from
 `VIDEO_DIR/input` (`./videos/input` for native repo runs when it exists, or
-`/videos/input` in Docker), splits the selected video into segments, queues one
-`ffmpeg_segment` task per segment, and merges the processed segments into
+`/videos/input` in Docker), lets you choose `segments` or `time range` mode,
+queues one FFmpeg task per chunk, and merges the processed chunks into
 `VIDEO_DIR/final/<name>_modified.mp4` when the job finishes successfully.
 
 ### Terminal 2 — Worker 1
@@ -309,7 +309,7 @@ Press `v` to process a whole video. The dashboard lists videos from
 # Or using env vars:
 MASTER_HOST=127.0.0.1 MASTER_PORT=9090 ./bin/worker
 
-# With FFmpeg workloads, also set VIDEO_DIR so workers find segments:
+# With FFmpeg workloads, also set VIDEO_DIR so workers find video files:
 VIDEO_DIR=./videos ./bin/worker 127.0.0.1 9090
 ```
 
@@ -346,7 +346,7 @@ nc -vz <windows-lan-ip> 9090
 ./bin/worker <windows-lan-ip> 9090
 ```
 
-For FFmpeg workloads, the Pi must also access the same `videos/` directory as the master. The worker receives only the segment number, so files such as `segments/part_000.mp4` must be visible from the Pi.
+For FFmpeg workloads, the Pi must also access the same `videos/` directory as the master. Segment mode reads files such as `segments/part_000.mp4`; time-range mode reads the selected original file from `input/`.
 
 Share the Windows folder `distributed-resource-scheduler/videos`:
 
@@ -412,7 +412,7 @@ The `submit` binary connects to the master, sends N task packets, then disconnec
   -c CMD      command code 1-8       (default: 1)
   -a ARG      primary argument       (default: 5000000)
   -s STEP     increment ARG by STEP per task (default: 0)
-  -e END      range_end for cmd 3, matrix size for cmd 8
+  -e END      range_end for cmd 3, duration for cmd 7, matrix size for cmd 8
   -i ID       starting task ID       (default: 100)
 ```
 
@@ -439,6 +439,9 @@ The `submit` binary connects to the master, sends N task packets, then disconnec
 
 # 12 FFmpeg segment tasks (segment IDs 0-11)
 ./bin/submit -c 6 -n 12 -a 0 -s 1 -i 300
+
+# 6 FFmpeg time-range tasks, 10 seconds each
+./bin/submit -c 7 -n 6 -a 0 -s 10 -i 400
 ```
 
 ---
@@ -453,7 +456,7 @@ The `submit` binary connects to the master, sends N task packets, then disconnec
 | 4 | `monte_carlo` (parallel) | Sample count | — | Points inside unit circle |
 | 5 | `mandelbrot` (parallel) | Row start | — | Iteration checksum for 100 rows |
 | 6 | `ffmpeg_segment` (parallel) | Segment ID | — | 1=success 2=timeout 3=missing 4=error |
-| 7 | `ffmpeg_script` (parallel) | Segment ID | — | 1=success 2=timeout 3=missing 4=error |
+| 7 | `ffmpeg_time_range` (parallel) | Start second | Duration seconds | 1=success 2=timeout 3=missing 4=error |
 | 8 | `matrix_parallel` (parallel) | Row start | Matrix size | Checksum for 100 matrix rows |
 
 ### Aggregating parallel results
@@ -485,8 +488,7 @@ videos/
 │   └── input.mp4        ← place your video here
 ├── segments/            ← created by split_video.sh
 ├── processed/           ← written by workers
-├── final/               ← created by merge_video.sh
-└── jobs/                ← trusted scripts for cmd 7
+└── final/               ← created by merge_video.sh
 ```
 
 ### 8.2 Step-by-step (Docker)
@@ -585,35 +587,35 @@ VIDEO_DIR=./videos ./scripts/merge_video.sh
 vlc videos/final/output.mp4    # or mpv / any player
 ```
 
-### 8.5 Using a custom FFmpeg script (cmd 7)
+### 8.5 Time-range FFmpeg mode (cmd 7)
 
-Write a script to `videos/jobs/task_400.sh`.  
-Use `${VIDEO_DIR:-/videos}` so the script works both natively and in Docker:
+Time-range mode does not pre-split the input file. Each task tells a worker
+which duration to process from the same original video:
 
-```bash
-#!/bin/sh
-# $1 = segment ID
-VDIR="${VIDEO_DIR:-/videos}"
-ffmpeg -y \
-    -i "$VDIR/segments/part_$(printf "%03d" "$1").mp4" \
-    -vf "vflip" \
-    "$VDIR/processed/part_$(printf "%03d" "$1").mp4"
+```text
+argument = start second
+result   = duration seconds
 ```
 
-Make it executable:
+The master writes the selected input name to `VIDEO_DIR/.last_input_name`, then
+workers read `VIDEO_DIR/input/<selected-video>` and write processed chunks to
+`VIDEO_DIR/processed/part_<task_id>.mp4`.
+
+Manual example for six 10-second ranges:
+
 ```bash
-chmod +x videos/jobs/task_400.sh
+# Select the current input file for workers:
+echo "input.mp4" > videos/.last_input_name
+
+# Queue ranges [0,10), [10,20), [20,30), ...
+./bin/submit -c 7 -n 6 -a 0 -s 10 -i 400
+
+# After all tasks complete:
+VIDEO_DIR=./videos ./scripts/merge_video.sh
 ```
 
-Submit one cmd=7 task referencing this script (task_id=400 → worker reads `jobs/task_400.sh`):
-```bash
-./bin/submit -c 7 -n 1 -a 0 -i 400
-```
-
-For native runs, workers must also have `VIDEO_DIR` set when they start so they can find the script:
-```bash
-VIDEO_DIR=./videos ./bin/worker 127.0.0.1 9090
-```
+The dashboard `v` flow handles this automatically when the mode is set to
+`time range`.
 
 ---
 
@@ -710,7 +712,7 @@ The master registers it as a new worker and begins assigning tasks to it.
 | `0` | Failure (generic) |
 | `1` | Success |
 | `2` | Timeout (killed after 120 s) |
-| `3` | Input segment missing |
+| `3` | Input segment or input video missing |
 | `4` | FFmpeg command error (non-zero exit) |
 
 ---
@@ -742,5 +744,10 @@ docker compose up --build
 # FFmpeg — split, submit, merge
 VIDEO_DIR=./videos ./scripts/split_video.sh
 ./bin/submit -c 6 -n $(ls videos/segments/part_*.mp4 | wc -l) -a 0 -s 1 -i 300
+VIDEO_DIR=./videos ./scripts/merge_video.sh
+
+# FFmpeg — time-range mode, then merge
+echo "input.mp4" > videos/.last_input_name
+./bin/submit -c 7 -n 6 -a 0 -s 10 -i 400
 VIDEO_DIR=./videos ./scripts/merge_video.sh
 ```

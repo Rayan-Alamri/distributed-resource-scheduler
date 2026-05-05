@@ -23,7 +23,7 @@
 #define MIN_ROWS 20
 #define MIN_COLS 78
 #define SUBMIT_FIELD_COUNT 6
-#define VIDEO_FIELD_COUNT 3
+#define VIDEO_FIELD_COUNT 4
 #define MAX_VIDEO_FILES 32
 #define VIDEO_NAME_LEN 256
 
@@ -74,14 +74,21 @@ typedef struct {
 
 typedef enum {
     VIDEO_FIELD_FILE,
+    VIDEO_FIELD_MODE,
     VIDEO_FIELD_SEGMENT_SECONDS,
     VIDEO_FIELD_START_ID
 } VideoField;
+
+typedef enum {
+    VIDEO_MODE_SEGMENTS,
+    VIDEO_MODE_TIME_RANGE
+} VideoMode;
 
 typedef struct {
     char files[MAX_VIDEO_FILES][VIDEO_NAME_LEN];
     int file_count;
     int selected;
+    VideoMode mode;
     int field;
     int replace_on_digit;
     uint32_t segment_seconds;
@@ -294,12 +301,13 @@ static void refresh_video_files(void) {
                  "Put a video in %s/input.", master_video_dir());
     } else {
         snprintf(video_form.message, sizeof(video_form.message),
-                 "Choose a video to split, process, and merge.");
+                 "Choose a video processing mode.");
     }
 }
 
 static void open_video_form(void) {
     memset(&video_form, 0, sizeof(video_form));
+    video_form.mode = VIDEO_MODE_SEGMENTS;
     video_form.segment_seconds = 10;
     video_form.start_id = dashboard_next_task_id;
     video_form.field = VIDEO_FIELD_FILE;
@@ -329,6 +337,13 @@ static void adjust_video_value(int direction) {
         return;
     }
 
+    if (video_form.field == VIDEO_FIELD_MODE) {
+        video_form.mode = video_form.mode == VIDEO_MODE_SEGMENTS
+            ? VIDEO_MODE_TIME_RANGE
+            : VIDEO_MODE_SEGMENTS;
+        return;
+    }
+
     uint32_t *value = video_form.field == VIDEO_FIELD_SEGMENT_SECONDS
         ? &video_form.segment_seconds
         : &video_form.start_id;
@@ -345,7 +360,7 @@ static void adjust_video_value(int direction) {
 static void set_video_digit(int digit) {
     uint32_t *value;
 
-    if (video_form.field == VIDEO_FIELD_FILE)
+    if (video_form.field == VIDEO_FIELD_FILE || video_form.field == VIDEO_FIELD_MODE)
         return;
 
     value = video_form.field == VIDEO_FIELD_SEGMENT_SECONDS
@@ -366,7 +381,7 @@ static void set_video_digit(int digit) {
 static void backspace_video_value(void) {
     uint32_t *value;
 
-    if (video_form.field == VIDEO_FIELD_FILE)
+    if (video_form.field == VIDEO_FIELD_FILE || video_form.field == VIDEO_FIELD_MODE)
         return;
 
     value = video_form.field == VIDEO_FIELD_SEGMENT_SECONDS
@@ -396,13 +411,14 @@ static void submit_video_form(void) {
     }
 
     snprintf(video_form.message, sizeof(video_form.message),
-             "Splitting %.200s...", video_form.files[video_form.selected]);
-    /*
-     * The master performs split + enqueue synchronously, then workers process
-     * segments asynchronously. Completion is detected in update_video_pipeline.
-     */
+             "%s %.180s...",
+             video_form.mode == VIDEO_MODE_SEGMENTS ? "Splitting" : "Queueing ranges for",
+             video_form.files[video_form.selected]);
     status = master_process_video(dashboard_master,
                                   video_form.files[video_form.selected],
+                                  video_form.mode == VIDEO_MODE_SEGMENTS
+                                      ? VIDEO_PROCESS_SEGMENTS
+                                      : VIDEO_PROCESS_TIME_RANGE,
                                   video_form.segment_seconds,
                                   video_form.start_id,
                                   &segment_count,
@@ -419,7 +435,7 @@ static void submit_video_form(void) {
     snprintf(video_pipeline.input_name, sizeof(video_pipeline.input_name),
              "%s", video_form.files[video_form.selected]);
     snprintf(video_pipeline.status, sizeof(video_pipeline.status),
-             "Processing %s: %u segment task(s).",
+             "Processing %s: %u video task(s).",
              video_pipeline.input_name, segment_count);
 
     dashboard_next_task_id = video_form.start_id + segment_count;
@@ -446,7 +462,7 @@ static void update_video_pipeline(const MasterSnapshot *snapshot) {
     video_pipeline.active = 0;
     if (snapshot->job.failed > 0) {
         snprintf(video_pipeline.status, sizeof(video_pipeline.status),
-                 "Video failed: %u segment(s) failed.", snapshot->job.failed);
+                 "Video failed: %u task(s) failed.", snapshot->job.failed);
         return;
     }
 
@@ -504,16 +520,6 @@ static void apply_command_defaults(uint32_t command_code) {
         submit_form.argument = 0;
         submit_form.step = 100u;
         break;
-    case CMD_FFMPEG_SEGMENT:
-        submit_form.count = 12;
-        submit_form.argument = 0;
-        submit_form.step = 1;
-        break;
-    case CMD_FFMPEG_SCRIPT:
-        submit_form.count = 4;
-        submit_form.argument = 0;
-        submit_form.step = 1;
-        break;
     case CMD_MATRIX_PARALLEL:
         submit_form.count = 10;
         submit_form.argument = 0;
@@ -534,6 +540,24 @@ static void open_submit_form(void) {
     snprintf(submit_form.message, sizeof(submit_form.message),
              "Create a task batch.");
     dashboard_mode = DASHBOARD_MODE_SUBMIT;
+}
+
+static int submit_command_allowed(uint32_t command_code) {
+    return command_code >= CMD_PRIME &&
+        command_code <= CMD_MATRIX_PARALLEL &&
+        command_code != CMD_FFMPEG_SEGMENT &&
+        command_code != CMD_FFMPEG_TIME_RANGE;
+}
+
+static uint32_t next_submit_command(uint32_t command_code, int direction) {
+    do {
+        if (direction > 0)
+            command_code = command_code >= CMD_MATRIX_PARALLEL ? CMD_PRIME : command_code + 1;
+        else
+            command_code = command_code <= CMD_PRIME ? CMD_MATRIX_PARALLEL : command_code - 1;
+    } while (!submit_command_allowed(command_code));
+
+    return command_code;
 }
 
 static void submit_form_move(int delta) {
@@ -565,11 +589,7 @@ static void adjust_selected_value(int direction) {
     if (submit_form.field == SUBMIT_FIELD_COMMAND) {
         uint32_t command_code = submit_form.command_code;
 
-        if (direction > 0)
-            command_code = command_code >= CMD_MATRIX_PARALLEL ? CMD_PRIME : command_code + 1;
-        else
-            command_code = command_code <= CMD_PRIME ? CMD_MATRIX_PARALLEL : command_code - 1;
-        apply_command_defaults(command_code);
+        apply_command_defaults(next_submit_command(command_code, direction));
         submit_form.replace_on_digit = 1;
         return;
     }
@@ -592,8 +612,12 @@ static void adjust_selected_value(int direction) {
 
 static void set_selected_digit(int digit) {
     if (submit_form.field == SUBMIT_FIELD_COMMAND) {
-        if (digit >= CMD_PRIME && digit <= CMD_MATRIX_PARALLEL)
+        if (submit_command_allowed((uint32_t)digit)) {
             apply_command_defaults((uint32_t)digit);
+        } else if (digit == CMD_FFMPEG_SEGMENT || digit == CMD_FFMPEG_TIME_RANGE) {
+            snprintf(submit_form.message, sizeof(submit_form.message),
+                     "Use v for FFmpeg video processing.");
+        }
         return;
     }
 
@@ -620,10 +644,9 @@ static void backspace_selected_value(void) {
 }
 
 static int validate_submit_form(void) {
-    if (submit_form.command_code < CMD_PRIME ||
-        submit_form.command_code > CMD_MATRIX_PARALLEL) {
+    if (!submit_command_allowed(submit_form.command_code)) {
         snprintf(submit_form.message, sizeof(submit_form.message),
-                 "Command must be 1 through 8.");
+                 "Use v for FFmpeg; task form supports commands 1-5 and 8.");
         return -1;
     }
 
@@ -920,7 +943,7 @@ static void render_footer(int rows, int cols) {
     } else if (dashboard_mode == DASHBOARD_MODE_VIDEO) {
         text = "Enter: process video  Esc: cancel  r: refresh  Up/Down: field  Left/Right: adjust";
     } else {
-        text = "n: new task batch  v: process whole video  q: quit";
+        text = "n: non-video task batch  v: process whole video  q: quit";
     }
 
     attron(A_REVERSE);
@@ -1030,7 +1053,7 @@ static void render_submit_form(int rows, int cols) {
 
 static void render_video_form(int rows, int cols) {
     int width = cols - 6;
-    int height = 16;
+    int height = 17;
     int y;
     int x;
     WINDOW *win;
@@ -1063,22 +1086,36 @@ static void render_video_form(int rows, int cols) {
         render_submit_field(win, 2, video_form.field == VIDEO_FIELD_FILE,
                             "Video", value);
 
+        snprintf(value, sizeof(value), "%s",
+                 video_form.mode == VIDEO_MODE_SEGMENTS
+                     ? "segments"
+                     : "time range");
+        render_submit_field(win, 3, video_form.field == VIDEO_FIELD_MODE,
+                            "Mode", value);
+
         snprintf(value, sizeof(value), "%u", video_form.segment_seconds);
-        render_submit_field(win, 3,
+        render_submit_field(win, 4,
                             video_form.field == VIDEO_FIELD_SEGMENT_SECONDS,
-                            "Segment sec", value);
+                            video_form.mode == VIDEO_MODE_SEGMENTS
+                                ? "Segment sec"
+                                : "Range sec",
+                            value);
 
         snprintf(value, sizeof(value), "%u", video_form.start_id);
-        render_submit_field(win, 4, video_form.field == VIDEO_FIELD_START_ID,
+        render_submit_field(win, 5, video_form.field == VIDEO_FIELD_START_ID,
                             "Start ID", value);
 
         wattron(win, pair_attr(COLOR_MUTED));
-        mvwhline(win, 6, 2, ACS_HLINE, width - 4);
+        mvwhline(win, 7, 2, ACS_HLINE, width - 4);
         wattroff(win, pair_attr(COLOR_MUTED));
 
-        mvwprintw(win, 7, 3, "This will split the video, queue cmd=6 for all segments,");
-        mvwprintw(win, 8, 3, "then merge processed segments after the job completes.");
-        mvwprintw(win, 10, 3, "Videos: %d found. Selected %d of %d.",
+        if (video_form.mode == VIDEO_MODE_SEGMENTS) {
+            mvwprintw(win, 8, 3, "Segments: split first, queue cmd=6 for each segment.");
+        } else {
+            mvwprintw(win, 8, 3, "Time range: queue cmd=7 chunks from the same input file.");
+        }
+        mvwprintw(win, 9, 3, "Both modes merge processed parts after the job completes.");
+        mvwprintw(win, 11, 3, "Videos: %d found. Selected %d of %d.",
                   video_form.file_count,
                   video_form.selected + 1,
                   video_form.file_count);

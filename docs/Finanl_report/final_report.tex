@@ -356,7 +356,7 @@ Each worker executes tasks through \texttt{executor\_run\_task()}. The executor 
 4 & \texttt{monte\_carlo} & Parallel Monte Carlo sampling for estimating pi. \\
 5 & \texttt{mandelbrot} & Parallel row-chunk checksum for Mandelbrot rows. \\
 6 & \texttt{ffmpeg\_segment} & Parallel FFmpeg processing of video segments. \\
-7 & \texttt{ffmpeg\_script} & Parallel custom FFmpeg script execution per segment. \\
+7 & \texttt{ffmpeg\_time\_range} & Parallel FFmpeg processing of time ranges from one input video. \\
 8 & \texttt{matrix\_parallel} & Parallel matrix checksum using 100-row chunks. \\
 \bottomrule
 \end{tabular}
@@ -364,7 +364,7 @@ Each worker executes tasks through \texttt{executor\_run\_task()}. The executor 
 
 \subsection{FFmpeg Video Pipeline}
 
-For video workloads, the master or helper scripts split an input video into files such as \texttt{part\_000.mp4}, \texttt{part\_001.mp4}, and so on. Each segment becomes a separate task. Workers process segments into \texttt{videos/processed/}, and the master merges processed segments into \texttt{videos/final/}. After a segment is successfully processed, its original input segment is deleted because it is no longer needed.
+For video workloads, the dashboard supports two modes. In segment mode, the master or helper scripts split an input video into files such as \texttt{part\_000.mp4}, \texttt{part\_001.mp4}, and so on; each segment becomes a separate task. In time-range mode, the master queues tasks with a start second and duration, and workers read the same original input file while producing independent processed chunks. Workers write chunks into \texttt{videos/processed/}, and the master merges processed chunks into \texttt{videos/final/}. After a segment-mode task is successfully processed, its original input segment is deleted because it is no longer needed.
 
 \subsection{Tools and Technologies}
 
@@ -422,7 +422,7 @@ The task submission dialog provides dashboard-side job creation without using th
 \caption{Submit Tasks dialog for creating a compute batch directly from the ncurses dashboard.}
 \end{figure}
 
-The video processing dialog is specialized for FFmpeg workflows. It lets the user choose an input video, set the segment duration, and select the starting task ID. The dashboard then splits the video, queues one \texttt{ffmpeg\_segment} task per segment, tracks progress through the job panel, and merges the processed segments after the job completes.
+The video processing dialog is specialized for FFmpeg workflows. It lets the user choose an input video, select segment mode or time-range mode, set the chunk duration, and select the starting task ID. The dashboard then queues the appropriate FFmpeg tasks, tracks progress through the job panel, and merges the processed chunks after the job completes.
 
 \begin{figure}[H]
 \centering

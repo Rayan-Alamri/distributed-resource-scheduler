@@ -39,6 +39,11 @@ typedef struct {
     JobSummary     job;
 } MasterState;
 
+typedef enum {
+    VIDEO_PROCESS_SEGMENTS,
+    VIDEO_PROCESS_TIME_RANGE
+} VideoProcessMode;
+
 /* Initialize server socket, queue, registry, and scheduler. Returns 0 on success. */
 int  server_init(MasterState *ms, int port);
 
@@ -61,6 +66,7 @@ const char *master_video_dir(void);
 
 int master_process_video(MasterState *ms,
                          const char *input_name,
+                         VideoProcessMode mode,
                          uint32_t segment_seconds,
                          uint32_t start_id,
                          uint32_t *segment_count_out,

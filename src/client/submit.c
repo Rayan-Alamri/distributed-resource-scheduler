@@ -41,12 +41,12 @@ static void usage(const char *prog) {
         "              4=monte_carlo    (parallel) argument = sample count\n"
         "              5=mandelbrot     (parallel) argument = row_start    (use -s 100)\n"
         "              6=ffmpeg_segment (parallel) argument = segment_id   (use -s 1 for sequential)\n"
-        "              7=ffmpeg_script  (parallel) argument = segment_id   (task_id = script ref)\n"
+        "              7=ffmpeg_time_range (parallel) argument = start_second, -s/-e = duration seconds\n"
         "              8=matrix_parallel (parallel) argument = row_start, -e = matrix size\n"
         "  -a ARG      primary argument           (default: %u)\n"
         "  -s STEP     increment argument by STEP per task (default: 0)\n"
         "              For cmd=3: also derives range_end = arg + step - 1 per chunk\n"
-        "  -e END      range_end for cmd=3, matrix size for cmd=8\n"
+        "  -e END      range_end for cmd=3, duration for cmd=7, matrix size for cmd=8\n"
         "  -i ID       starting task ID           (default: %u)\n"
         "\n"
         "Environment variables (overridden by flags):\n"
@@ -60,7 +60,7 @@ static void usage(const char *prog) {
         "  %s -c 4 -n 4 -a 10000000              # Monte Carlo Pi: 4 x 10M samples\n"
         "  %s -c 5 -n 6 -a 0 -s 100              # Mandelbrot: 6 x 100-row chunks\n"
         "  %s -c 6 -n 12 -a 0 -s 1 -i 300        # FFmpeg: 12 segments (0-11)\n"
-        "  %s -c 7 -n 4  -a 0 -s 1 -i 400        # FFmpeg script: segments 0-3\n"
+        "  %s -c 7 -n 4  -a 0 -s 10 -i 400       # FFmpeg ranges: 0s,10s,20s,30s\n"
         "  %s -c 8 -n 10 -a 0 -s 100 -e 1000     # parallel matrix: size 1000\n",
         prog,
         DEFAULT_HOST, DEFAULT_PORT, DEFAULT_COUNT, DEFAULT_CMD,
@@ -85,7 +85,7 @@ static const char *cmd_name(uint32_t cmd) {
     case CMD_MONTE_CARLO:    return "monte_carlo";
     case CMD_MANDELBROT:     return "mandelbrot";
     case CMD_FFMPEG_SEGMENT: return "ffmpeg_segment";
-    case CMD_FFMPEG_SCRIPT:  return "ffmpeg_script";
+    case CMD_FFMPEG_TIME_RANGE: return "ffmpeg_time_range";
     case CMD_MATRIX_PARALLEL: return "matrix_parallel";
     default:                 return "unknown";
     }
@@ -146,6 +146,10 @@ int main(int argc, char *argv[]) {
         fprintf(stderr, "submit: cmd=8 requires -e MATRIX_SIZE\n");
         return 1;
     }
+    if (cmd == CMD_FFMPEG_TIME_RANGE && step == 0 && range_end == 0) {
+        fprintf(stderr, "submit: cmd=7 requires -s or -e duration seconds\n");
+        return 1;
+    }
 
     struct hostent *he = gethostbyname(host);
     if (!he) {
@@ -190,6 +194,8 @@ int main(int argc, char *argv[]) {
         task.task_id      = start_id + (uint32_t)i;
         task.command_code = cmd;
         task.argument     = arg + (uint32_t)i * step;
+        if (cmd == CMD_FFMPEG_TIME_RANGE && step == 0 && range_end > 0)
+            task.argument = arg + (uint32_t)i * range_end;
 
         /*
          * Some workloads use `result` as a second task argument before the
@@ -201,6 +207,8 @@ int main(int argc, char *argv[]) {
                 : range_end;
         } else if (cmd == CMD_MATRIX_PARALLEL) {
             task.result = range_end;
+        } else if (cmd == CMD_FFMPEG_TIME_RANGE) {
+            task.result = step > 0 ? step : range_end;
         }
 
         payload_to_net(&task);
@@ -216,6 +224,9 @@ int main(int argc, char *argv[]) {
                    task.task_id, cmd, cmd_name(cmd), task.argument, task.result);
         else if (cmd == CMD_MATRIX_PARALLEL)
             printf("[submit] queued  task_id=%-4u  cmd=%u(%s)  row_start=%u  matrix_size=%u\n",
+                   task.task_id, cmd, cmd_name(cmd), task.argument, task.result);
+        else if (cmd == CMD_FFMPEG_TIME_RANGE)
+            printf("[submit] queued  task_id=%-4u  cmd=%u(%s)  start=%us duration=%us\n",
                    task.task_id, cmd, cmd_name(cmd), task.argument, task.result);
         else
             printf("[submit] queued  task_id=%-4u  cmd=%u(%s)  arg=%u\n",

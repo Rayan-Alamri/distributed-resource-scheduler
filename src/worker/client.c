@@ -41,7 +41,7 @@ static const char *cmd_name(uint32_t cmd) {
     case CMD_MONTE_CARLO:    return "monte_carlo";
     case CMD_MANDELBROT:     return "mandelbrot";
     case CMD_FFMPEG_SEGMENT: return "ffmpeg_segment";
-    case CMD_FFMPEG_SCRIPT:  return "ffmpeg_script";
+    case CMD_FFMPEG_TIME_RANGE: return "ffmpeg_time_range";
     case CMD_MATRIX_PARALLEL: return "matrix_parallel";
     default:                 return "unknown";
     }
@@ -62,6 +62,10 @@ static uint64_t elapsed_ms(const struct timespec *start, const struct timespec *
 static void print_task_fields(const NetworkPayload *task) {
     if ((CommandCode)task->command_code == CMD_PRIME_RANGE) {
         printf("task_id=%u cmd=%u(%s) arg=%u range_end=%u",
+               task->task_id, task->command_code, cmd_name(task->command_code),
+               task->argument, task->result);
+    } else if ((CommandCode)task->command_code == CMD_FFMPEG_TIME_RANGE) {
+        printf("task_id=%u cmd=%u(%s) start=%us duration=%us",
                task->task_id, task->command_code, cmd_name(task->command_code),
                task->argument, task->result);
     } else {
