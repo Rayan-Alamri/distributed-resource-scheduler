@@ -268,6 +268,12 @@ These commands match the execution workflow documented in the final report.
 - Docker and Docker Compose for container simulation
 - For small clones on worker devices, use a shallow clone: `git clone --depth 1 <repo-url>`
 
+Install the native packages on Ubuntu/Debian/WSL/Raspberry Pi OS with one command:
+
+```bash
+sudo apt update && sudo apt install -y build-essential make gcc libncurses-dev ffmpeg cifs-utils
+```
+
 Generated video files should not be committed. Keep large input videos and generated outputs under `videos/` locally; `.gitignore` keeps `videos/input`, `videos/processed`, and `videos/final` contents out of Git while preserving their `.gitkeep` files.
 
 ### Native Run Commands
