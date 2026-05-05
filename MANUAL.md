@@ -17,6 +17,16 @@
 
 ## 1. Prerequisites
 
+### Cloning the repository
+
+For worker devices such as Raspberry Pis, prefer a shallow clone so Git does not download old large video files from repository history:
+
+```bash
+git clone --depth 1 <repo-url>
+```
+
+Generated video files should stay local. Do not commit input videos, processed segments, or final outputs from `videos/`; the repository keeps those folders with `.gitkeep` files only.
+
 ### For native (non-Docker) runs
 
 | Tool | Purpose |

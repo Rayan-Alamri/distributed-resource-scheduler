@@ -265,6 +265,9 @@ These commands match the execution workflow documented in the final report.
 - `ncurses` development package
 - `ffmpeg` and `ffprobe` for video workloads
 - Docker and Docker Compose for container simulation
+- For small clones on worker devices, use a shallow clone: `git clone --depth 1 <repo-url>`
+
+Generated video files should not be committed. Keep large input videos and generated outputs under `videos/` locally; `.gitignore` keeps `videos/input`, `videos/processed`, and `videos/final` contents out of Git while preserving their `.gitkeep` files.
 
 ### Native Run Commands
 
