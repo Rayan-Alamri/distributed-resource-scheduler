@@ -264,6 +264,7 @@ These commands match the execution workflow documented in the final report.
 - `pthread` support
 - `ncurses` development package
 - `ffmpeg` and `ffprobe` for video workloads
+- `cifs-utils` on Raspberry Pi workers that mount the shared Windows `videos/` folder
 - Docker and Docker Compose for container simulation
 - For small clones on worker devices, use a shallow clone: `git clone --depth 1 <repo-url>`
 
@@ -314,6 +315,32 @@ From the Raspberry Pi, test the TCP port and then start the worker:
 ```bash
 nc -vz <windows-lan-ip> 9090
 ./bin/worker <windows-lan-ip> 9090
+```
+
+For FFmpeg video processing with a real Raspberry Pi worker, the Pi must also see the same `videos/` directory as the master. Share the Windows folder `distributed-resource-scheduler/videos` as `drs-videos`, then mount it on the Pi:
+
+```bash
+sudo apt update
+sudo apt install cifs-utils ffmpeg
+sudo mkdir -p /mnt/drs-videos
+sudo mount -t cifs //<windows-lan-ip>/drs-videos /mnt/drs-videos -o username=<windows-user>,uid=$(id -u),gid=$(id -g),rw,vers=3.0
+```
+
+Verify that the Pi can see the shared folders:
+
+```bash
+ls /mnt/drs-videos
+ls /mnt/drs-videos/segments
+```
+
+Launch the master with the local repo video directory, and launch the Pi worker with the mounted video directory:
+
+```bash
+# WSL/laptop
+VIDEO_DIR=./videos ./bin/master
+
+# Raspberry Pi
+VIDEO_DIR=/mnt/drs-videos ./bin/worker <windows-lan-ip> 9090
 ```
 
 Run the unit tests with:

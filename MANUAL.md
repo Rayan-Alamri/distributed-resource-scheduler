@@ -34,10 +34,11 @@ Generated video files should stay local. Do not commit input videos, processed s
 | `gcc` | Compiler |
 | `make` | Build system |
 | `ffmpeg` | Required only for FFmpeg workloads (cmd 6 & 7) |
+| `cifs-utils` | Required on Raspberry Pi workers that mount the Windows shared `videos/` folder |
 
 Install on Ubuntu/Debian:
 ```bash
-sudo apt install gcc make ffmpeg
+sudo apt install gcc make ffmpeg cifs-utils
 ```
 
 Install on Alpine:
@@ -343,6 +344,49 @@ On the Raspberry Pi, test the TCP port and then connect the worker:
 ```bash
 nc -vz <windows-lan-ip> 9090
 ./bin/worker <windows-lan-ip> 9090
+```
+
+For FFmpeg workloads, the Pi must also access the same `videos/` directory as the master. The worker receives only the segment number, so files such as `segments/part_000.mp4` must be visible from the Pi.
+
+Share the Windows folder `distributed-resource-scheduler/videos`:
+
+1. Open File Explorer and right click the `videos` folder.
+2. Open Properties → Sharing → Advanced Sharing.
+3. Enable "Share this folder".
+4. Use the share name `drs-videos`.
+5. Give the Windows user read/write permission in both Sharing permissions and Security permissions.
+
+On the Raspberry Pi, install the mount tools and create the mount point:
+
+```bash
+sudo apt update
+sudo apt install cifs-utils ffmpeg
+sudo mkdir -p /mnt/drs-videos
+```
+
+Mount the Windows share on the Pi:
+
+```bash
+sudo mount -t cifs //<windows-lan-ip>/drs-videos /mnt/drs-videos -o username=<windows-user>,uid=$(id -u),gid=$(id -g),rw,vers=3.0
+```
+
+The command asks for the Windows user's password. A successful mount usually prints nothing. Verify that the Pi can see the shared video folders:
+
+```bash
+ls /mnt/drs-videos
+ls /mnt/drs-videos/segments
+```
+
+Start the master using the local repo video directory:
+
+```bash
+VIDEO_DIR=./videos ./bin/master
+```
+
+Start the Raspberry Pi worker using the mounted video directory:
+
+```bash
+VIDEO_DIR=/mnt/drs-videos ./bin/worker <windows-lan-ip> 9090
 ```
 
 ### Terminal 4 — Submit client
